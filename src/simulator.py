@@ -1,8 +1,10 @@
+from datetime import datetime
+
 from src.classes.bank import Bank
-from src.classes.csv_settings import CSVSettings
-from src.classes.day_config import DayConfig
-from src.classes.transaction import Transaction
-from src.matching import naive_bilateral_matching
+from src.classes.configs.csv_config import CSVSettings
+from src.classes.configs.day_config import DayConfig
+from src.classes.transaction import DatedTransaction
+from src.matching import Matching
 from src.utils.csvutils import read_csv, write_to_csv
 
 from queue import Queue
@@ -30,12 +32,12 @@ def read_transactions(file_name):
     rows = read_csv(file_name)
     transactions = []
     for row in rows:
-        timestep = int(row[0])
+        time = datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S")
         sending_bank_id = int(row[1])
         receiving_bank_id = int(row[2])
         amount = float(row[3])
 
-        transaction = Transaction(timestep, sending_bank_id, receiving_bank_id, amount)
+        transaction = DatedTransaction(sending_bank_id, receiving_bank_id, amount, time)
         transactions.append(transaction)
 
     return transactions
@@ -47,19 +49,22 @@ def simulate_day_transactions(day_config: DayConfig, csv_settings: CSVSettings):
     bank_balances = []
     timesteps = []
 
-    transactionQueue = Queue()
+    transaction_queue = Queue()
 
     for transaction in transactions:
         if not day_config.LSM_enabled:
             banks[transaction.sending_bank_id].outbound_transaction(transaction)
             banks[transaction.receiving_bank_id].inbound_transaction(transaction)
         else:
-            transactionQueue.put(transaction)
+            transaction_queue.put(transaction)
             if transaction.time % day_config.matching_window == day_config.matching_window - 1:
-                naive_bilateral_matching(banks, transactionQueue, transaction.time)
+                matching = Matching(banks, transaction_queue, transaction.time)
+                matching.naive_multilateral_offsetting()
 
         timesteps.append(transaction.time)
         current_bank_balances = fetch_all_bank_balances(banks)
         bank_balances.append(current_bank_balances)
 
     write_to_csv(csv_settings.output_file_name, csv_settings.headers, bank_balances)
+
+    return banks
