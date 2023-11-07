@@ -62,7 +62,7 @@ def simulate_day_transactions(day_config: DayConfig, csv_settings: CSVSettings):
                 matching.naive_multilateral_offsetting()
 
         timesteps.append(transaction.time)
-        current_bank_balances = fetch_all_bank_balances(banks)
+        current_bank_balances = [transaction.time] + fetch_all_bank_balances(banks)
         bank_balances.append(current_bank_balances)
 
     write_to_csv(csv_settings.output_file_name, csv_settings.headers, bank_balances)

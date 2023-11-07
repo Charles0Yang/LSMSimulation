@@ -1,21 +1,31 @@
+from datetime import datetime
+
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.dates import DateFormatter, HourLocator
 import sys
 
-file = sys.argv[1]
-colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
 
-df = pd.read_csv(f"../data/synthetic_data/{file}")
-time = df["time"]
+def plot(file_name):
+    colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
 
-plt.figure(figsize=(10, 6))
-for i, col in enumerate(df.columns[1:]):
-    balances = df[col]
-    color = colors[i % len(colors)]
-    plt.plot(time, balances, linestyle='-', color=color)
+    df = pd.read_csv(f"/Users/cyang/PycharmProjects/PartIIProject/src/data/synthetic_data/{file_name}")
+    df["time"] = pd.to_datetime(df["time"])
+    times = df["time"]
 
-plt.xlabel("Time")
-plt.ylabel("Balance")
+    plt.figure(figsize=(10, 6))
+    ax = plt.gca()
 
-plt.show()
+    for i, col in enumerate(df.columns[1:]):
+        balances = df[col]
+        color = colors[i % len(colors)]
+        ax.plot(times, balances, linestyle='-', color=color)
 
+    date_format = DateFormatter("%H:%M")
+    ax.xaxis.set_major_formatter(date_format)
+    ax.xaxis.set_major_locator(HourLocator(interval=1))
+
+    plt.xlabel("Time")
+    plt.ylabel("Balance")
+
+    plt.show()
