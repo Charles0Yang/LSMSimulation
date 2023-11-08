@@ -1,20 +1,21 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from src.classes.bank import Bank
+from src.classes.bank import Bank, NormalBank, DelayBank
 from src.classes.configs.csv_config import CSVSettings
 from src.classes.configs.day_config import DayConfig
 from src.classes.transaction import DatedTransaction
 from src.matching import Matching
 from src.utils.csvutils import read_csv, write_to_csv
 
-from queue import Queue
 
-
-def generate_banks(num_banks, starting_balance):
+def generate_banks(num_banks, starting_balance, input_file):
     banks = {}
     bank_name = "A"
     for i in range(num_banks):
-        banks[i] = Bank(i, bank_name, starting_balance)
+        if i % 2 == 0:
+            banks[i] = NormalBank(i, bank_name, starting_balance, input_file)
+        else:
+            banks[i] = DelayBank(i, bank_name, starting_balance, input_file, 0)
         bank_name = chr(ord(bank_name) + 1)
 
     return banks
@@ -44,25 +45,30 @@ def read_transactions(file_name):
 
 
 def simulate_day_transactions(day_config: DayConfig, csv_settings: CSVSettings):
+    start_time = datetime(2023, 1, 1, 5, 45)
+    end_time = datetime(2023, 1, 1, 18, 20)
+
     transactions = read_transactions(csv_settings.input_file_name)
-    banks = generate_banks(day_config.num_banks, day_config.starting_balance)
+    banks = generate_banks(day_config.num_banks, day_config.starting_balance, csv_settings.input_file_name)
     bank_balances = []
-    timesteps = []
 
-    transaction_queue = Queue()
+    current_time = start_time
+    while current_time != end_time :
 
-    for transaction in transactions:
-        if not day_config.LSM_enabled:
+        transactions_to_execute = []
+        for bank in banks:
+            banks[bank].check_and_add_transaction(current_time)
+            bank_transactions = banks[bank].execute_transaction_from_queue(current_time)
+            for transaction in bank_transactions:
+                transactions_to_execute.append(transaction)
+
+        for transaction in transactions_to_execute:
             banks[transaction.sending_bank_id].outbound_transaction(transaction)
             banks[transaction.receiving_bank_id].inbound_transaction(transaction)
-        else:
-            transaction_queue.put(transaction)
-            if transaction.time % day_config.matching_window == day_config.matching_window - 1:
-                matching = Matching(banks, transaction_queue, transaction.time)
-                matching.naive_multilateral_offsetting()
 
-        timesteps.append(transaction.time)
-        current_bank_balances = [transaction.time] + fetch_all_bank_balances(banks)
+        current_time += timedelta(seconds=60)
+
+        current_bank_balances = [current_time] + fetch_all_bank_balances(banks)
         bank_balances.append(current_bank_balances)
 
     write_to_csv(csv_settings.output_file_name, csv_settings.headers, bank_balances)

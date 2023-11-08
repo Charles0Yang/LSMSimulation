@@ -2,20 +2,21 @@ from src.classes.configs.data_generation_config import DataGenerationConfig
 from src.classes.transaction import DatedTransaction
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
+import pandas as pd
+from queue import Queue
 
 
 class Bank:
-    # These numbers from recent Jan 2023 BoE paper changing the closing time from 4:20PM to 6:20PM
-    opening_time = datetime(2023, 1, 1, 5, 45)
-    closing_time = datetime(2023, 1, 1, 18, 20)
-
-    def __init__(self, id, name, balance):
+    def __init__(self, id, name, balance, input_file):
         self.id = id
         self.name = name
         self.balance = balance
         self.min_balance = 100000000
         self.transactions_completed = []
-        self.transactions_to_do = []
+        self.transactions_to_do = self.get_transactions(input_file)
+        self.transaction_queue = Queue()
+        self.opening_time = datetime(2023, 1, 1, 5, 45)
+        self.closing_time = datetime(2023, 1, 1, 18, 20)
 
     def inbound_transaction(self, transaction: DatedTransaction):
         self.balance += transaction.amount
@@ -29,23 +30,65 @@ class Bank:
         if self.balance < self.min_balance:
             self.min_balance = self.balance
 
+    def add_transaction_to_queue(self, transaction):
+        self.transaction_queue.put(transaction)
+
+    def pop_transaction_from_queue(self):
+        return self.transaction_queue.get()
+
+    def execute_transaction_from_queue(self, time):
+        transactions_to_execute = []
+        while not self.transaction_queue.empty() and time == self.transaction_queue.queue[0].time:
+            transaction = self.pop_transaction_from_queue()
+            transactions_to_execute.append(transaction)
+        return transactions_to_execute
+
+    def get_transactions(self, file_name):
+        df = pd.read_csv(f"/Users/cyang/PycharmProjects/PartIIProject/src/data/synthetic_data/{file_name}")
+        transactions_to_do = df[df['from'] == self.id].iloc[1:].values.tolist()
+        transactions = []
+        for row in transactions_to_do:
+            time = datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S")
+            sending_bank_id = int(row[1])
+            receiving_bank_id = int(row[2])
+            amount = float(row[3])
+
+            transaction = DatedTransaction(sending_bank_id, receiving_bank_id, amount, time)
+            transactions.append(transaction)
+
+        return transactions
+
 
 class AgentBank(ABC, Bank):
-    def __int__(self, id, name, balance, transaction_distribution):
+    def __int__(self, id, name, balance, input_file, delay_amount):
         super().__init__(id, name, balance)
-        self.transaction_distribution = transaction_distribution
+        self.delay_amount = delay_amount
 
     @abstractmethod
-    def generate_transactions(self):
+    def check_and_add_transaction(self, time):
         pass
 
 
 class NormalBank(AgentBank):
-    def __int__(self, id, name, balance, transaction_distribution):
-        super().__init__(id, name, balance, transaction_distribution)
+    def __init__(self, id, name, balance, input_file):
+        super().__init__(id, name, balance, input_file)
 
-    def assign_time_to_transaction(self, current_time):
-        pass
+    def check_and_add_transaction(self, time):
+        while self.transactions_to_do and time == self.transactions_to_do[0].time:
+            self.add_transaction_to_queue(self.transactions_to_do[0])
+            self.transactions_to_do.pop(0)
 
 
+class DelayBank(AgentBank):
+    def __init__(self, id, name, balance, input_file, delay_amount):
+        super().__init__(id, name, balance, input_file)
+        self.delay_amount = delay_amount
 
+    def check_and_add_transaction(self, time):
+        while self.transactions_to_do and time == self.transactions_to_do[0].time:
+            transaction = self.transactions_to_do[0]
+            transaction.time += timedelta(seconds=self.delay_amount)
+            if transaction.time > self.closing_time:
+                transaction.time = self.closing_time
+            self.add_transaction_to_queue(transaction)
+            self.transactions_to_do.pop(0)

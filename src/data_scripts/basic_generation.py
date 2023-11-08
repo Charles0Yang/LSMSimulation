@@ -56,9 +56,9 @@ def generate_data(data_generation_config):
         random_writer = csv.writer(random, delimiter=',')
         alternative_writer = csv.writer(alternative, delimiter=',')
 
-        reactive_writer.writerow(["time", "to", "from", "amount"])
-        random_writer.writerow(["time", "to", "from", "amount"])
-        alternative_writer.writerow(["time", "to", "from", "amount"])
+        reactive_writer.writerow(["time", "from", "to", "amount"])
+        random_writer.writerow(["time", "from", "to", "amount"])
+        alternative_writer.writerow(["time", "from", "to", "amount"])
 
         for row in reactive_data:
             reactive_writer.writerow(row)

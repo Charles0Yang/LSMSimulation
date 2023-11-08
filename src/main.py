@@ -8,7 +8,7 @@ from src.test_suite import MetricGetter
 
 if __name__ == '__main__':
 
-    num_passes = 50
+    num_passes = 1
 
     data_generation_config = DataGenerationConfig(
         num_banks=2,
