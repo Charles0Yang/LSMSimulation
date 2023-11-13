@@ -5,10 +5,10 @@ import networkx as nx
 
 class Matching:
 
-    def __init__(self, banks, transaction_queue, timestep):
+    def __init__(self, banks, transaction_queue, time):
         self.banks = banks
         self.transaction_queue = transaction_queue
-        self.timestep = timestep
+        self.time = time
 
     def naive_bilateral_matching(self):
 
@@ -30,8 +30,10 @@ class Matching:
         for pair in send_receive_pairs:
             amount = send_receive_pairs[pair]
             sending_bank, receiving_bank = pair
+            print(sending_bank.id)
+            print(receiving_bank.id)
 
-            transaction = DatedTransaction(self.timestep, sending_bank.id, receiving_bank.id, amount)
+            transaction = DatedTransaction(self.time, sending_bank.id, receiving_bank.id, amount)
 
             sending_bank.outbound_transaction(transaction)
             receiving_bank.inbound_transaction(transaction)

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from queue import Queue
 
 from src.classes.bank import Bank, NormalBank, DelayBank
 from src.classes.configs.csv_config import CSVSettings
@@ -8,15 +9,19 @@ from src.matching import Matching
 from src.utils.csvutils import read_csv, write_to_csv
 
 
-def generate_banks(num_banks, starting_balance, input_file):
+def generate_banks(num_banks, bank_types, starting_balance, input_file):
     banks = {}
     bank_name = "A"
-    for i in range(num_banks):
-        if i % 2 == 0:
-            banks[i] = NormalBank(i, bank_name, starting_balance, input_file)
-        else:
-            banks[i] = DelayBank(i, bank_name, starting_balance, input_file, 0)
-        bank_name = chr(ord(bank_name) + 1)
+    bank_num = 0
+    for i in range(len(bank_types)):
+        if i == 0:
+            for j in range(bank_types[i]):
+                banks[bank_num] = NormalBank(bank_num, bank_name, starting_balance, input_file)
+                bank_num += 1
+        if i == 1:
+            for k in range(bank_types[i]):
+                banks[bank_num] = DelayBank(bank_num, bank_name, starting_balance, input_file, 3600)
+                bank_num += 1
 
     return banks
 
@@ -49,27 +54,55 @@ def simulate_day_transactions(day_config: DayConfig, csv_settings: CSVSettings):
     end_time = datetime(2023, 1, 1, 18, 20)
 
     transactions = read_transactions(csv_settings.input_file_name)
-    banks = generate_banks(day_config.num_banks, day_config.starting_balance, csv_settings.input_file_name)
+    banks = generate_banks(day_config.num_banks, day_config.bank_types, day_config.starting_balance, csv_settings.input_file_name)
     bank_balances = []
 
+    transaction_queue = Queue()
+
     current_time = start_time
-    while current_time != end_time :
+    matching_window = 0
+    while current_time != end_time:
 
-        transactions_to_execute = []
         for bank in banks:
-            banks[bank].check_and_add_transaction(current_time)
-            bank_transactions = banks[bank].execute_transaction_from_queue(current_time)
+            banks[bank].check_for_transactions(current_time)
+            bank_transactions = banks[bank].post_transactions(current_time)
             for transaction in bank_transactions:
-                transactions_to_execute.append(transaction)
+                transaction_queue.put(transaction)
 
-        for transaction in transactions_to_execute:
-            banks[transaction.sending_bank_id].outbound_transaction(transaction)
-            banks[transaction.receiving_bank_id].inbound_transaction(transaction)
+        if not day_config.LSM_enabled:
+            while not transaction_queue.empty():
+                transaction = transaction_queue.get(transaction)
+                banks[transaction.sending_bank_id].outbound_transaction(transaction)
+                banks[transaction.receiving_bank_id].inbound_transaction(transaction)
 
+        else:
+            if matching_window == day_config.matching_window:
+                matching = Matching(banks, transaction_queue, current_time)
+                matching.naive_bilateral_matching()
+
+                matching_window = 0
+
+        matching_window += 1
         current_time += timedelta(seconds=60)
 
         current_bank_balances = [current_time] + fetch_all_bank_balances(banks)
         bank_balances.append(current_bank_balances)
+
+    ### Deal with deadline possible transactions
+
+    for bank in banks:
+        banks[bank].check_for_transactions(current_time)
+        bank_transactions = banks[bank].post_transactions(current_time)
+        for transaction in bank_transactions:
+            transaction_queue.put(transaction)
+
+    while not transaction_queue.empty():
+        transaction = transaction_queue.get(transaction)
+        banks[transaction.sending_bank_id].outbound_transaction(transaction)
+        banks[transaction.receiving_bank_id].inbound_transaction(transaction)
+
+    current_bank_balances = [current_time] + fetch_all_bank_balances(banks)
+    bank_balances.append(current_bank_balances)
 
     write_to_csv(csv_settings.output_file_name, csv_settings.headers, bank_balances)
 

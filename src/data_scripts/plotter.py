@@ -19,7 +19,7 @@ def plot(file_name):
     for i, col in enumerate(df.columns[1:]):
         balances = df[col]
         color = colors[i % len(colors)]
-        ax.plot(times, balances, linestyle='-', color=color)
+        ax.plot(times, balances, linestyle='-', color=color, label=str(col))
 
     date_format = DateFormatter("%H:%M")
     ax.xaxis.set_major_formatter(date_format)
@@ -27,5 +27,7 @@ def plot(file_name):
 
     plt.xlabel("Time")
     plt.ylabel("Balance")
+
+    ax.legend()
 
     plt.show()

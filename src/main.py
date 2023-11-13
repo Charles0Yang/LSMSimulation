@@ -11,24 +11,34 @@ if __name__ == '__main__':
     num_passes = 1
 
     data_generation_config = DataGenerationConfig(
-        num_banks=2,
-        num_transactions=300,
+        num_banks=5,
+        num_transactions=1000,
         min_transaction_amount=10,
         max_transaction_amount=20
     )
 
+    lsm_day_config = DayConfig(
+        num_banks=data_generation_config.num_banks,
+        bank_types=[3, 2],
+        starting_balance=500,
+        LSM_enabled=True,
+        matching_window=20,
+        timesteps=300
+    )
+
     no_lsm_day_config = DayConfig(
         num_banks=data_generation_config.num_banks,
+        bank_types=[3, 2],
         starting_balance=500,
         LSM_enabled=False,
-        matching_window=20,
+        matching_window=1,
         timesteps=300
     )
 
     random_csv_settings = CSVSettings(
         input_file_name='random/random_data.csv',
         output_file_name='random/random_output.csv',
-        headers=['time'] + list(np.arange(no_lsm_day_config.num_banks))
+        headers=['time'] + list(np.arange(lsm_day_config.num_banks))
     )
 
     random_metrics = MetricGetter(data_generation_config, no_lsm_day_config, random_csv_settings, num_passes)

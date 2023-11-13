@@ -36,12 +36,12 @@ class Bank:
     def pop_transaction_from_queue(self):
         return self.transaction_queue.get()
 
-    def execute_transaction_from_queue(self, time):
-        transactions_to_execute = []
+    def post_transactions(self, time):
+        transactions_to_post = []
         while not self.transaction_queue.empty() and time == self.transaction_queue.queue[0].time:
             transaction = self.pop_transaction_from_queue()
-            transactions_to_execute.append(transaction)
-        return transactions_to_execute
+            transactions_to_post.append(transaction)
+        return transactions_to_post
 
     def get_transactions(self, file_name):
         df = pd.read_csv(f"/Users/cyang/PycharmProjects/PartIIProject/src/data/synthetic_data/{file_name}")
@@ -65,7 +65,7 @@ class AgentBank(ABC, Bank):
         self.delay_amount = delay_amount
 
     @abstractmethod
-    def check_and_add_transaction(self, time):
+    def check_for_transactions(self, time):
         pass
 
 
@@ -73,10 +73,9 @@ class NormalBank(AgentBank):
     def __init__(self, id, name, balance, input_file):
         super().__init__(id, name, balance, input_file)
 
-    def check_and_add_transaction(self, time):
+    def check_for_transactions(self, time):
         while self.transactions_to_do and time == self.transactions_to_do[0].time:
-            self.add_transaction_to_queue(self.transactions_to_do[0])
-            self.transactions_to_do.pop(0)
+            self.add_transaction_to_queue(self.transactions_to_do.pop(0))
 
 
 class DelayBank(AgentBank):
@@ -84,11 +83,10 @@ class DelayBank(AgentBank):
         super().__init__(id, name, balance, input_file)
         self.delay_amount = delay_amount
 
-    def check_and_add_transaction(self, time):
+    def check_for_transactions(self, time):
         while self.transactions_to_do and time == self.transactions_to_do[0].time:
-            transaction = self.transactions_to_do[0]
+            transaction = self.transactions_to_do.pop(0)
             transaction.time += timedelta(seconds=self.delay_amount)
             if transaction.time > self.closing_time:
                 transaction.time = self.closing_time
             self.add_transaction_to_queue(transaction)
-            self.transactions_to_do.pop(0)
