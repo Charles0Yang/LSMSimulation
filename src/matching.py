@@ -15,28 +15,30 @@ class Matching:
         send_receive_pairs = {}
         while not self.transaction_queue.empty():
             transaction = self.transaction_queue.get()
-            send_receive_pair = (self.banks[transaction.sending_bank_id], self.banks[transaction.receiving_bank_id])
-            reverse_pair = (self.banks[transaction.receiving_bank_id], self.banks[transaction.sending_bank_id])
 
-            if send_receive_pair in send_receive_pairs:
+            send_receive_pair = (transaction.sending_bank_id, transaction.receiving_bank_id)
+            reverse_pair = (transaction.receiving_bank_id, transaction.sending_bank_id)
+
+            if send_receive_pair in send_receive_pairs.keys():
                 send_receive_pairs[send_receive_pair] += transaction.amount
 
-            elif reverse_pair in send_receive_pairs:
+            elif reverse_pair in send_receive_pairs.keys():
                 send_receive_pairs[reverse_pair] -= transaction.amount
 
             else:
                 send_receive_pairs[send_receive_pair] = transaction.amount
 
+
         for pair in send_receive_pairs:
             amount = send_receive_pairs[pair]
-            sending_bank, receiving_bank = pair
-            print(sending_bank.id)
-            print(receiving_bank.id)
+            sending_bank_id, receiving_bank_id = pair
+            if amount < 0:
+                sending_bank_id, receiving_bank_id = receiving_bank_id, sending_bank_id
+                amount = -amount
 
-            transaction = DatedTransaction(self.time, sending_bank.id, receiving_bank.id, amount)
-
-            sending_bank.outbound_transaction(transaction)
-            receiving_bank.inbound_transaction(transaction)
+            transaction = DatedTransaction(sending_bank_id, receiving_bank_id, amount, self.time)
+            self.banks[sending_bank_id].outbound_transaction(transaction)
+            self.banks[receiving_bank_id].inbound_transaction(transaction)
 
     def naive_multilateral_offsetting(self):
 

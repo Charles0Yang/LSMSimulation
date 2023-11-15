@@ -20,7 +20,7 @@ def generate_banks(num_banks, bank_types, starting_balance, input_file):
                 bank_num += 1
         if i == 1:
             for k in range(bank_types[i]):
-                banks[bank_num] = DelayBank(bank_num, bank_name, starting_balance, input_file, 3600)
+                banks[bank_num] = DelayBank(bank_num, bank_name, starting_balance, input_file, 0)
                 bank_num += 1
 
     return banks
@@ -53,7 +53,6 @@ def simulate_day_transactions(day_config: DayConfig, csv_settings: CSVSettings):
     start_time = datetime(2023, 1, 1, 5, 45)
     end_time = datetime(2023, 1, 1, 18, 20)
 
-    transactions = read_transactions(csv_settings.input_file_name)
     banks = generate_banks(day_config.num_banks, day_config.bank_types, day_config.starting_balance, csv_settings.input_file_name)
     bank_balances = []
 
@@ -79,10 +78,10 @@ def simulate_day_transactions(day_config: DayConfig, csv_settings: CSVSettings):
             if matching_window == day_config.matching_window:
                 matching = Matching(banks, transaction_queue, current_time)
                 matching.naive_bilateral_matching()
-
                 matching_window = 0
 
-        matching_window += 1
+            matching_window += 1
+
         current_time += timedelta(seconds=60)
 
         current_bank_balances = [current_time] + fetch_all_bank_balances(banks)
@@ -101,7 +100,7 @@ def simulate_day_transactions(day_config: DayConfig, csv_settings: CSVSettings):
         banks[transaction.sending_bank_id].outbound_transaction(transaction)
         banks[transaction.receiving_bank_id].inbound_transaction(transaction)
 
-    current_bank_balances = [current_time] + fetch_all_bank_balances(banks)
+    current_bank_balances = [current_time + timedelta(seconds=1200)] + fetch_all_bank_balances(banks)
     bank_balances.append(current_bank_balances)
 
     write_to_csv(csv_settings.output_file_name, csv_settings.headers, bank_balances)

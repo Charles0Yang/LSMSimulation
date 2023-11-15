@@ -14,7 +14,7 @@ if __name__ == '__main__':
         num_banks=5,
         num_transactions=1000,
         min_transaction_amount=10,
-        max_transaction_amount=20
+        max_transaction_amount=1
     )
 
     lsm_day_config = DayConfig(
@@ -22,7 +22,7 @@ if __name__ == '__main__':
         bank_types=[3, 2],
         starting_balance=500,
         LSM_enabled=True,
-        matching_window=20,
+        matching_window=30,
         timesteps=300
     )
 
@@ -41,7 +41,7 @@ if __name__ == '__main__':
         headers=['time'] + list(np.arange(lsm_day_config.num_banks))
     )
 
-    random_metrics = MetricGetter(data_generation_config, no_lsm_day_config, random_csv_settings, num_passes)
+    random_metrics = MetricGetter(data_generation_config, lsm_day_config, random_csv_settings, num_passes)
 
     print(f"No LSM Random avg min balance: {random_metrics.calc_average_min_balance()}")
 
