@@ -80,6 +80,46 @@ class Matching:
             sending_bank.outbound_transaction(transaction)
             receiving_bank.inbound_transaction(transaction)
 
+    def multilateral_offsetting(self):
+        balances = {self.banks[bank].id: self.banks[bank].balance for bank in self.banks}
+        transactions_to_do = list(self.transaction_queue.queue)
+        transactions_to_carryover = []
+
+        for transaction in transactions_to_do:
+            balances[transaction.sending_bank_id] -= transaction.amount
+            balances[transaction.receiving_bank_id] += transaction.amount
+
+        while not self.bank_balances_positive(balances):
+            for bank in balances:
+                if balances[bank] < 0:
+                    transaction = self.remove_bank_last_transaction(transactions_to_do, bank)
+                    balances[transaction.sending_bank_id] += transaction.amount
+                    balances[transaction.receiving_bank_id] -= transaction.amount
+                    transactions_to_do.remove(transaction)
+                    transactions_to_carryover.insert(0, transaction)
+                    break
+
+        for transaction in transactions_to_do:
+            sending_bank = self.banks[transaction.sending_bank_id]
+            receiving_bank = self.banks[transaction.receiving_bank_id]
+
+            sending_bank.outbound_transaction(transaction)
+            receiving_bank.inbound_transaction(transaction)
+
+        self.transaction_queue = Queue()
+        for transaction in transactions_to_carryover:
+            self.transaction_queue.put(transaction)
+
+
+    def remove_bank_last_transaction(self, transactions, bank_id):
+        for transaction in reversed(transactions):
+            if transaction.sending_bank_id == bank_id:
+                return transaction
+
+    def bank_balances_positive(self, balances):
+        return all(balance >= 0 for balance in balances.values())
+
+
     def build_graph(self):
 
         g = nx.DiGraph()
