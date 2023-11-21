@@ -70,7 +70,7 @@ def simulate_day_transactions(day_config: DayConfig, csv_settings: CSVSettings):
 
         if not day_config.LSM_enabled:
             while not transaction_queue.empty():
-                transaction = transaction_queue.get(transaction)
+                transaction = transaction_queue.get()
                 banks[transaction.sending_bank_id].outbound_transaction(transaction)
                 banks[transaction.receiving_bank_id].inbound_transaction(transaction)
 
@@ -82,7 +82,7 @@ def simulate_day_transactions(day_config: DayConfig, csv_settings: CSVSettings):
 
             matching_window += 1
 
-        current_time += timedelta(seconds=60)
+        current_time += timedelta(seconds=1)
 
         current_bank_balances = [current_time] + fetch_all_bank_balances(banks)
         bank_balances.append(current_bank_balances)
@@ -96,7 +96,7 @@ def simulate_day_transactions(day_config: DayConfig, csv_settings: CSVSettings):
             transaction_queue.put(transaction)
 
     while not transaction_queue.empty():
-        transaction = transaction_queue.get(transaction)
+        transaction = transaction_queue.get()
         banks[transaction.sending_bank_id].outbound_transaction(transaction)
         banks[transaction.receiving_bank_id].inbound_transaction(transaction)
 

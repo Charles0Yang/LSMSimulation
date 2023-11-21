@@ -17,8 +17,8 @@ def generate_data(data_generation_config):
     start_time = datetime(2023, 1, 1, 5, 45)  # 5:45 AM
     end_time = datetime(2023, 1, 1, 18, 20)  # 6:20 PM
 
-    transaction_times = np.random.uniform(0, (end_time - start_time).seconds // 60, size=data_generation_config.num_transactions)
-    timesteps = np.array(sorted([start_time + timedelta(minutes=int(time)) for time in transaction_times]))
+    transaction_times = np.random.uniform(0, (end_time - start_time).seconds, size=data_generation_config.num_transactions)
+    timesteps = np.array(sorted([start_time + timedelta(seconds=int(time)) for time in transaction_times]))
 
     # Set random transactions equally distributed among all banks
     num_bank_transactions = num_transactions // num_banks

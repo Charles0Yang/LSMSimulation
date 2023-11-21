@@ -6,7 +6,7 @@ from matplotlib.dates import DateFormatter, HourLocator
 import sys
 
 
-def plot(file_name):
+def plot_from_file(file_name):
     colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
 
     df = pd.read_csv(f"/Users/cyang/PycharmProjects/PartIIProject/src/data/synthetic_data/{file_name}")

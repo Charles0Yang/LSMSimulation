@@ -3,7 +3,7 @@ import numpy as np
 from src.classes.configs.csv_config import CSVSettings
 from src.classes.configs.data_generation_config import DataGenerationConfig
 from src.classes.configs.day_config import DayConfig
-from src.data_scripts.plotter import plot
+from src.data_scripts.plotter import plot_from_file
 from src.test_suite import MetricGetter
 
 if __name__ == '__main__':
@@ -12,9 +12,9 @@ if __name__ == '__main__':
 
     data_generation_config = DataGenerationConfig(
         num_banks=5,
-        num_transactions=1000,
+        num_transactions=10000,
         min_transaction_amount=10,
-        max_transaction_amount=1
+        max_transaction_amount=20
     )
 
     lsm_day_config = DayConfig(
@@ -22,7 +22,7 @@ if __name__ == '__main__':
         bank_types=[3, 2],
         starting_balance=500,
         LSM_enabled=True,
-        matching_window=30,
+        matching_window=240,
         timesteps=300
     )
 
@@ -41,8 +41,10 @@ if __name__ == '__main__':
         headers=['time'] + list(np.arange(lsm_day_config.num_banks))
     )
 
-    random_metrics = MetricGetter(data_generation_config, lsm_day_config, random_csv_settings, num_passes)
+    #no_lsm_random_metrics = MetricGetter(data_generation_config, no_lsm_day_config, random_csv_settings, num_passes)
+    lsm_random_metrics = MetricGetter(data_generation_config, lsm_day_config, random_csv_settings, num_passes)
 
-    print(f"No LSM Random avg min balance: {random_metrics.calc_average_min_balance()}")
+    #print(f"No LSM Random avg min balance: {no_lsm_random_metrics.calc_average_min_balance()}")
+    print(f"LSM Random avg min balance: {lsm_random_metrics.calc_average_min_balance()}")
 
-    plot(random_csv_settings.output_file_name)
+    plot_from_file(random_csv_settings.output_file_name)
