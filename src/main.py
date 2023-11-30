@@ -12,7 +12,7 @@ if __name__ == '__main__':
 
     data_generation_config = DataGenerationConfig(
         num_banks=5,
-        num_transactions=10000,
+        num_transactions=5000,
         min_transaction_amount=10,
         max_transaction_amount=20
     )

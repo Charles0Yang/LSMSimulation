@@ -69,15 +69,20 @@ def simulate_day_transactions(day_config: DayConfig, csv_settings: CSVSettings):
                 transaction_queue.put(transaction)
 
         if not day_config.LSM_enabled:
+            temp_transaction_queue = Queue()
             while not transaction_queue.empty():
                 transaction = transaction_queue.get()
-                banks[transaction.sending_bank_id].outbound_transaction(transaction)
-                banks[transaction.receiving_bank_id].inbound_transaction(transaction)
+                if banks[transaction.sending_bank_id].balance - transaction.amount >= 0:
+                    banks[transaction.sending_bank_id].outbound_transaction(transaction)
+                    banks[transaction.receiving_bank_id].inbound_transaction(transaction)
+                else:
+                    temp_transaction_queue.put(transaction)
+            transaction_queue = temp_transaction_queue
 
         else:
             if matching_window == day_config.matching_window:
                 matching = Matching(banks, transaction_queue, current_time)
-                matching.naive_bilateral_matching()
+                transaction_queue = matching.bilateral_offsetting()
                 matching_window = 0
 
             matching_window += 1
