@@ -4,7 +4,7 @@ from queue import Queue
 from src.classes.bank import NormalBank
 from src.classes.transaction import DatedTransaction
 from src.matching import Matching
-from src.simulator import fetch_all_bank_balances
+from src.simulation.day_simulator import fetch_all_bank_balances
 
 
 def two_banks_naive_bilateral_matching_one_way():

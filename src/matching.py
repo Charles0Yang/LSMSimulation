@@ -124,7 +124,6 @@ class Matching:
 
         return carryover_transactions
 
-
     def multilateral_offsetting(self):
         balances = {self.banks[bank].id: self.banks[bank].balance for bank in self.banks}
         transactions_to_do = list(self.transaction_queue.queue)

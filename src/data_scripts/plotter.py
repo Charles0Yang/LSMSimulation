@@ -9,7 +9,7 @@ import sys
 def plot_from_file(file_name):
     colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
 
-    df = pd.read_csv(f"/Users/cyang/PycharmProjects/PartIIProject/src/data/synthetic_data/{file_name}")
+    df = pd.read_csv(f"/Users/cyang/PycharmProjects/PartIIProject/data/synthetic_data/{file_name}")
     df["time"] = pd.to_datetime(df["time"])
     times = df["time"]
 

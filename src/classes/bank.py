@@ -11,12 +11,13 @@ class Bank:
         self.id = id
         self.name = name
         self.balance = balance
-        self.min_balance = 100000000
         self.transactions_completed = []
         self.transactions_to_do = self.get_transactions(input_file)
         self.transaction_queue = Queue()
         self.opening_time = datetime(2023, 1, 1, 5, 45)
         self.closing_time = datetime(2023, 1, 1, 18, 20)
+        self.min_balance = 100000000
+        self.cum_settlement_delay = 0
 
     def inbound_transaction(self, transaction: DatedTransaction):
         self.balance += transaction.amount
@@ -44,7 +45,7 @@ class Bank:
         return transactions_to_post
 
     def get_transactions(self, file_name):
-        df = pd.read_csv(f"/Users/cyang/PycharmProjects/PartIIProject/src/data/synthetic_data/{file_name}")
+        df = pd.read_csv(f"/Users/cyang/PycharmProjects/PartIIProject/data/synthetic_data/{file_name}")
         transactions_to_do = df[df['from'] == self.id].iloc[1:].values.tolist()
         transactions = []
         for row in transactions_to_do:
@@ -78,15 +79,18 @@ class NormalBank(AgentBank):
             self.add_transaction_to_queue(self.transactions_to_do.pop(0))
 
 
+
 class DelayBank(AgentBank):
     def __init__(self, id, name, balance, input_file, delay_amount):
         super().__init__(id, name, balance, input_file)
         self.delay_amount = delay_amount
 
+    # Checks for transactions they need to do then delays and puts them into a separate queue
     def check_for_transactions(self, time):
         while self.transactions_to_do and time == self.transactions_to_do[0].time:
             transaction = self.transactions_to_do.pop(0)
             transaction.time += timedelta(seconds=self.delay_amount)
+            self.cum_settlement_delay += self.delay_amount
             if transaction.time > self.closing_time:
                 transaction.time = self.closing_time
             self.add_transaction_to_queue(transaction)

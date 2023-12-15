@@ -49,9 +49,9 @@ def generate_data(data_generation_config):
                         .reshape(-1, np.array(ordered_bank_transactions).shape[2]))
     alternative_data = np.column_stack((timesteps, alternative_data))
 
-    with (open('/Users/cyang/PycharmProjects/PartIIProject/src/data/synthetic_data/reactive/reactive_data.csv', 'w', newline='') as reactive,
-          open('/Users/cyang/PycharmProjects/PartIIProject/src/data/synthetic_data/random/random_data.csv', 'w', newline='') as random,
-          open('/Users/cyang/PycharmProjects/PartIIProject/src/data/synthetic_data/alternative/alternative_data.csv', 'w', newline='') as alternative):
+    with (open('/data/synthetic_data/reactive/reactive_data.csv', 'w', newline='') as reactive,
+          open('/data/synthetic_data/random/random_data.csv', 'w', newline='') as random,
+          open('/data/synthetic_data/alternative/alternative_data.csv', 'w', newline='') as alternative):
         reactive_writer = csv.writer(reactive, delimiter=',')
         random_writer = csv.writer(random, delimiter=',')
         alternative_writer = csv.writer(alternative, delimiter=',')
