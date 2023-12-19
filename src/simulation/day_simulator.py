@@ -4,6 +4,7 @@ from queue import Queue
 from src.classes.configs.csv_config import CSVSettings
 from src.classes.configs.day_config import DayConfig
 from src.matching import Matching
+from src.simulation import settings
 from src.utils.csvutils import write_to_csv
 
 
@@ -15,7 +16,7 @@ def fetch_all_bank_balances(banks):
     return current_bank_balances
 
 
-def simulate_day_transactions(day_config: DayConfig, csv_settings: CSVSettings, banks):
+def simulate_day_transactions(banks):
     start_time = datetime(2023, 1, 1, 5, 45)
     end_time = datetime(2023, 1, 1, 18, 20)
 
@@ -33,7 +34,7 @@ def simulate_day_transactions(day_config: DayConfig, csv_settings: CSVSettings, 
             for transaction in bank_transactions:
                 transaction_queue.put(transaction)
 
-        if not day_config.LSM_enabled:
+        if not settings.day_config.LSM_enabled:
             temp_transaction_queue = Queue()
             while not transaction_queue.empty():
                 transaction = transaction_queue.get()
@@ -45,7 +46,7 @@ def simulate_day_transactions(day_config: DayConfig, csv_settings: CSVSettings, 
             transaction_queue = temp_transaction_queue
 
         else:
-            if matching_window == day_config.matching_window:
+            if matching_window == settings.day_config.matching_window:
                 matching = Matching(banks, transaction_queue, current_time)
                 transaction_queue = matching.bilateral_offsetting()
                 matching_window = 0
@@ -73,6 +74,6 @@ def simulate_day_transactions(day_config: DayConfig, csv_settings: CSVSettings, 
     current_bank_balances = [current_time + timedelta(seconds=1200)] + fetch_all_bank_balances(banks)
     bank_balances.append(current_bank_balances)
 
-    write_to_csv(csv_settings.output_file_name, csv_settings.headers, bank_balances)
+    write_to_csv(settings.csv_settings.output_file_name, settings.csv_settings.headers, bank_balances)
 
     return banks

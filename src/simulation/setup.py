@@ -1,27 +1,27 @@
-from datetime import datetime, timedelta
-from queue import Queue
-
-from src.classes.bank import Bank, NormalBank, DelayBank
-from src.classes.configs.csv_config import CSVSettings
-from src.classes.configs.day_config import DayConfig
+from datetime import datetime
+from src.classes.bank import NormalBank, DelayBank
 from src.classes.transaction import DatedTransaction
-from src.matching import Matching
-from src.utils.csvutils import read_csv, write_to_csv
+from src.simulation import settings
+from src.utils.csvutils import read_csv
 
 
 def generate_banks(bank_types, starting_balance, input_file):
     banks = {}
     bank_name = "A"
     bank_num = 0
+    print(bank_types)
+    # First n banks are normal banks, rest are delay banks
     for i in range(len(bank_types)):
         if i == 0:
             for j in range(bank_types[i]):
                 banks[bank_num] = NormalBank(bank_num, bank_name, starting_balance, input_file)
                 bank_num += 1
+                bank_name = chr(ord(bank_name) + 1)
         if i == 1:
             for k in range(bank_types[i]):
-                banks[bank_num] = DelayBank(bank_num, bank_name, starting_balance, input_file, 120)
+                banks[bank_num] = DelayBank(bank_num, bank_name, starting_balance, input_file, settings.delay_amount)
                 bank_num += 1
+                bank_name = chr(ord(bank_name) + 1)
 
     return banks
 
