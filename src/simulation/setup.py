@@ -9,7 +9,6 @@ def generate_banks(bank_types, starting_balance, input_file):
     banks = {}
     bank_name = "A"
     bank_num = 0
-    print(bank_types)
     # First n banks are normal banks, rest are delay banks
     for i in range(len(bank_types)):
         if i == 0:
@@ -25,25 +24,3 @@ def generate_banks(bank_types, starting_balance, input_file):
 
     return banks
 
-
-def fetch_all_bank_balances(banks):
-    current_bank_balances = []
-    for bank_id in banks:
-        current_bank_balances.append(banks[bank_id].balance)
-
-    return current_bank_balances
-
-
-def read_transactions(file_name):
-    rows = read_csv(file_name)
-    transactions = []
-    for row in rows:
-        time = datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S")
-        sending_bank_id = int(row[1])
-        receiving_bank_id = int(row[2])
-        amount = float(row[3])
-
-        transaction = DatedTransaction(sending_bank_id, receiving_bank_id, amount, time)
-        transactions.append(transaction)
-
-    return transactions

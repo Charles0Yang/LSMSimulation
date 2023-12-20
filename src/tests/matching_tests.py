@@ -311,8 +311,33 @@ def are_queues_equal(a, b):
 
     return True
 
+def weird_test():
+
+    banks = {0: NormalBank(0, 'A', 10, "random/random_data.csv"),
+             1: NormalBank(1, 'B', 15, "random/random_data.csv")
+             }
+
+    banks[0].priority_balance = 5
+    banks[1].priority_balance = 5
+
+    banks[0].non_priority_balance = 5
+    banks[1].non_priority_balance = 10
+
+    time = datetime(2023, 1, 1, 5, 45)
+
+    transaction = DatedTransaction(1, 0, 12, time, 1)
+
+    banks[1].outbound_transaction(transaction)
+    banks[0].inbound_transaction(transaction)
+    print(f"Non priority balances: {[banks[bank].non_priority_balance for bank in banks]}")
+    print(f"Priority balances: {[banks[bank].priority_balance for bank in banks]}")
+
+    balances = fetch_all_bank_balances(banks)
+    print(balances)
+
 
 def main():
+    """
     two_banks_naive_bilateral_matching_one_way()
     two_banks_naive_bilateral_matching_two_way()
     three_banks_naive_bilateral_matching_one_way()
@@ -324,6 +349,8 @@ def main():
     three_banks_multilateral_matching_simple_accept_all_transactions()
     three_banks_multilateral_matching_complex_accept_all_transactions()
     three_banks_multilateral_matching_accept_and_reject_transactions()
+    """
+    weird_test()
 
 
 main()

@@ -2,6 +2,8 @@ import csv
 from datetime import datetime, timedelta
 import numpy as np
 
+from src.simulation import settings
+
 
 def generate_data(data_generation_config):
 
@@ -19,6 +21,7 @@ def generate_data(data_generation_config):
 
     transaction_times = np.random.uniform(0, (end_time - start_time).seconds, size=data_generation_config.num_transactions)
     timesteps = np.array(sorted([start_time + timedelta(seconds=int(time)) for time in transaction_times]))
+    priorities = (np.random.random(size=len(transaction_times)) > settings.priority_transaction_percentage).astype(int)
 
     # Set random transactions equally distributed among all banks
     num_bank_transactions = num_transactions // num_banks
@@ -36,9 +39,11 @@ def generate_data(data_generation_config):
             all_transactions.append(transactions)
 
     reactive_data = [(timestep,) + transaction for timestep, transaction in zip(timesteps, all_transactions)]
+    reactive_data = np.column_stack((reactive_data, priorities))
 
     np.random.shuffle(all_transactions)
     random_data = [(str(timestep),) + transaction for timestep, transaction in zip(timesteps, all_transactions)]
+    random_data = np.column_stack((random_data, priorities))
 
     ordered_bank_transactions = []
     for bank in banks_transactions:
@@ -47,18 +52,18 @@ def generate_data(data_generation_config):
     alternative_data = (np.array(ordered_bank_transactions)
                         .transpose(1, 0, 2)
                         .reshape(-1, np.array(ordered_bank_transactions).shape[2]))
-    alternative_data = np.column_stack((timesteps, alternative_data))
+    alternative_data = np.column_stack((timesteps, alternative_data, priorities))
 
-    with (open('/data/synthetic_data/reactive/reactive_data.csv', 'w', newline='') as reactive,
-          open('/data/synthetic_data/random/random_data.csv', 'w', newline='') as random,
-          open('/data/synthetic_data/alternative/alternative_data.csv', 'w', newline='') as alternative):
+    with (open('data/synthetic_data/reactive/reactive_data.csv', 'w', newline='') as reactive,
+          open('data/synthetic_data/random/random_data.csv', 'w', newline='') as random,
+          open('data/synthetic_data/alternative/alternative_data.csv', 'w', newline='') as alternative):
         reactive_writer = csv.writer(reactive, delimiter=',')
         random_writer = csv.writer(random, delimiter=',')
         alternative_writer = csv.writer(alternative, delimiter=',')
 
-        reactive_writer.writerow(["time", "from", "to", "amount"])
-        random_writer.writerow(["time", "from", "to", "amount"])
-        alternative_writer.writerow(["time", "from", "to", "amount"])
+        reactive_writer.writerow(["time", "from", "to", "amount", "priority"])
+        random_writer.writerow(["time", "from", "to", "amount", "priority"])
+        alternative_writer.writerow(["time", "from", "to", "amount", "priority"])
 
         for row in reactive_data:
             reactive_writer.writerow(row)

@@ -1,4 +1,6 @@
+from datetime import timedelta
 from queue import Queue
+import json
 
 from src.classes.bank import Bank
 from src.classes.transaction import DatedTransaction
@@ -125,17 +127,16 @@ class Matching:
         return carryover_transactions
 
     def multilateral_offsetting(self):
-        balances = {self.banks[bank].id: self.banks[bank].balance for bank in self.banks}
+        balances = {self.banks[bank].id: self.banks[bank].non_priority_balance for bank in self.banks}
         transactions_to_do = list(self.transaction_queue.queue)
         transactions_to_carryover = []
-
         for transaction in transactions_to_do:
             balances[transaction.sending_bank_id] -= transaction.amount
             balances[transaction.receiving_bank_id] += transaction.amount
 
         while not self.bank_balances_positive(balances):
             for bank in balances:
-                if balances[bank] < 0:
+                if int(balances[bank]) < 0:
                     transaction = self.remove_bank_last_transaction(transactions_to_do, bank)
                     balances[transaction.sending_bank_id] += transaction.amount
                     balances[transaction.receiving_bank_id] -= transaction.amount
@@ -144,6 +145,7 @@ class Matching:
                     break
 
         for transaction in transactions_to_do:
+            transaction.time += timedelta(seconds=20) # Transactions all go through at end of cycle
             sending_bank = self.banks[transaction.sending_bank_id]
             receiving_bank = self.banks[transaction.receiving_bank_id]
 
@@ -162,7 +164,7 @@ class Matching:
                 return transaction
 
     def bank_balances_positive(self, balances):
-        return all(balance >= 0 for balance in balances.values())
+        return all(int(balance) >= 0 for balance in balances.values())
 
     def build_graph(self):
 

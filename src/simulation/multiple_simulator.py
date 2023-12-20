@@ -16,13 +16,13 @@ class MultipleSimulator:
         self.banks = generate_banks(settings.day_config.bank_types,
                                     settings.day_config.starting_balance,
                                     settings.csv_settings.input_file_name)
+        self.all_normal_banks = generate_banks(settings.day_config_benchmark.bank_types,
+                                               settings.day_config.starting_balance,
+                                               settings.csv_settings.input_file_name)
 
-    def one_pass_full_run_new_data(self):
-        generate_data(self.data_generation_config)
-        banks = simulate_day_transactions(self.banks)
-        return banks
-
-    def one_pass_full_run_same_data(self):
+    def one_pass_full_run(self):
+        if settings.generate_new_data:
+            generate_data(settings.data_generation_config)
         banks = simulate_day_transactions(self.banks)
         return banks
 
@@ -32,8 +32,11 @@ class MultipleSimulator:
         return self.collect_metrics(banks)
 
     def compare_delay_behaviour(self):
-        banks = simulate_day_transactions(self.banks)
-        return banks
+        original_banks = simulate_day_transactions(self.banks)
+        print([original_banks[bank].min_balance for bank in original_banks])
+
+        normal_banks = simulate_day_transactions(self.all_normal_banks)
+        print([normal_banks[bank].min_balance for bank in normal_banks])
 
     def calc_average_min_balance(self, banks):
         total_min_balance = 0
