@@ -1,4 +1,5 @@
 from src.data_scripts.basic_generation import generate_data
+from src.metrics import Metrics
 from src.simulation import settings
 from src.simulation.day_simulator import simulate_day_transactions
 from src.simulation.setup import generate_banks
@@ -19,11 +20,14 @@ class MultipleSimulator:
         self.all_normal_banks = generate_banks(settings.day_config_benchmark.bank_types,
                                                settings.day_config.starting_balance,
                                                settings.csv_settings.input_file_name)
+        self.metrics = []
 
     def one_pass_full_run(self):
         if settings.generate_new_data:
             generate_data(settings.data_generation_config)
-        banks = simulate_day_transactions(self.banks)
+        metrics = Metrics()
+        banks, collected_metrics = simulate_day_transactions(self.banks, metrics)
+        self.metrics.append(collected_metrics)
         return banks
 
     def multiple_run(self):
@@ -32,11 +36,22 @@ class MultipleSimulator:
         return self.collect_metrics(banks)
 
     def compare_delay_behaviour(self):
-        original_banks = simulate_day_transactions(self.banks)
-        print([original_banks[bank].min_balance for bank in original_banks])
+        metrics = Metrics()
+        original_banks, collected_metrics = simulate_day_transactions(self.banks, metrics)
 
-        normal_banks = simulate_day_transactions(self.all_normal_banks)
-        print([normal_banks[bank].min_balance for bank in normal_banks])
+        metrics = Metrics()
+        normal_banks, collected_metrics = simulate_day_transactions(self.all_normal_banks, metrics)
+
+        delay_min_balances = [original_banks[bank].min_balance for bank in original_banks]
+        no_delay_min_balances = [normal_banks[bank].min_balance for bank in normal_banks]
+        bank_balances = list(zip(delay_min_balances, no_delay_min_balances))
+
+        for bank in original_banks:
+            difference_from_delaying = (bank_balances[bank][0] - bank_balances[bank][1]) / bank_balances[bank][1]
+            if difference_from_delaying >= 0:
+                print(f"Bank {original_banks[bank].name} benefited {difference_from_delaying * 100:.2f}% in min liquidity from banks delaying")
+            else:
+                print(f"Bank {original_banks[bank].name} lost {difference_from_delaying * 100:.2f}% in min liquidity from banks delaying")
 
     def calc_average_min_balance(self, banks):
         total_min_balance = 0

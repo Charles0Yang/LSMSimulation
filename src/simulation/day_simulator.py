@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from queue import Queue
 from src.matching import Matching
+from src.metrics import Metrics
 from src.simulation import settings
 from src.utils.csvutils import write_to_csv
 
@@ -13,7 +14,7 @@ def fetch_all_bank_balances(banks):
     return current_bank_balances
 
 
-def simulate_day_transactions(banks):
+def simulate_day_transactions(banks, metrics):
     bank_balances = []
     priority_transaction_queue = Queue()
     non_priority_transaction_queue = Queue()
@@ -43,15 +44,25 @@ def simulate_day_transactions(banks):
                 temp_transaction_queue.put(transaction)
         priority_transaction_queue = temp_transaction_queue
 
+        if settings.day_config.LSM_enabled:
+            # Run offsetting cycle and find matching payments
+            if matching_window == settings.day_config.matching_window:
+                matching = Matching(banks, non_priority_transaction_queue, current_time)
+                non_priority_transaction_queue = matching.multilateral_offsetting(metrics)
+                matching_window = -20 # Cycle takes 20 seconds complete
 
-        # Run offsetting cycle and find matching payments
-        if matching_window == settings.day_config.matching_window:
-            matching = Matching(banks, non_priority_transaction_queue, current_time)
-            non_priority_transaction_queue = matching.multilateral_offsetting()
-            matching_window = -20 # Cycle takes 20 seconds complete
+            matching_window += 1
 
-
-        matching_window += 1
+        else:
+            temp_transaction_queue = Queue()
+            while not non_priority_transaction_queue.empty():
+                transaction = non_priority_transaction_queue.get()
+                if banks[transaction.sending_bank_id].balance - transaction.amount >= 0:
+                    banks[transaction.sending_bank_id].outbound_transaction(transaction)
+                    banks[transaction.receiving_bank_id].inbound_transaction(transaction)
+                else:
+                    temp_transaction_queue.put(transaction)
+            non_priority_transaction_queue = temp_transaction_queue
 
         current_time += timedelta(seconds=1)
         current_bank_balances = [current_time] + fetch_all_bank_balances(banks)
@@ -76,6 +87,8 @@ def simulate_day_transactions(banks):
     current_bank_balances = [current_time + timedelta(seconds=1200)] + fetch_all_bank_balances(banks)
     bank_balances.append(current_bank_balances)
 
+    metrics.calculate_liquidity_saved_ratio()
+    print(f"Liquidity saved: {metrics.liquidity_saved_ratio*100:.2f}%")
     write_to_csv(settings.csv_settings.output_file_name, settings.csv_settings.headers, bank_balances)
 
-    return banks
+    return banks, metrics

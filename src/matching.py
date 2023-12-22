@@ -126,8 +126,9 @@ class Matching:
 
         return carryover_transactions
 
-    def multilateral_offsetting(self):
+    def multilateral_offsetting(self, metrics):
         balances = {self.banks[bank].id: self.banks[bank].non_priority_balance for bank in self.banks}
+        raw_balances_before = [balances[bank] for bank in balances]
         transactions_to_do = list(self.transaction_queue.queue)
         transactions_to_carryover = []
         for transaction in transactions_to_do:
@@ -155,6 +156,9 @@ class Matching:
         self.transaction_queue = Queue()
         for transaction in transactions_to_carryover:
             self.transaction_queue.put(transaction)
+
+        raw_balances_after = [balances[bank] for bank in balances]
+        metrics.add_to_liquidity_and_transaction_volumes(raw_balances_before, raw_balances_after, transactions_to_do)
 
         return self.transaction_queue
 
