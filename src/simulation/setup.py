@@ -21,6 +21,5 @@ def generate_banks(bank_types, starting_balance, input_file):
                 banks[bank_num] = DelayBank(bank_num, bank_name, starting_balance, input_file, settings.delay_amount)
                 bank_num += 1
                 bank_name = chr(ord(bank_name) + 1)
-
     return banks
 

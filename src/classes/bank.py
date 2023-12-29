@@ -1,12 +1,21 @@
+import numpy as np
+from scipy import integrate
+
 from src.classes.configs.data_generation_config import DataGenerationConfig
 from src.classes.transaction import DatedTransaction
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 import pandas as pd
+import heapq
 from queue import Queue
+from scipy.stats import norm, gaussian_kde
 
 from src.simulation import settings
+from src.simulation.settings import data_generation_config
 
+
+def convert_datetime_to_decimal(date):
+    return date.hour + date.minute / 60.0
 
 class Bank:
     def __init__(self, id, name, balance, input_file):
@@ -14,11 +23,11 @@ class Bank:
         self.name = name
         self.balance = balance
         self.priority_balance = balance * settings.priority_balance_percentage
-        self.non_priority_balance = balance * (1-settings.priority_balance_percentage)
+        self.non_priority_balance = balance * (1 - settings.priority_balance_percentage)
         self.transactions_completed = []
         self.transactions_to_do = self.get_transactions(input_file)
-        self.priority_transaction_queue = Queue()
-        self.non_priority_transaction_queue = Queue()
+        self.priority_transaction_queue = []
+        self.non_priority_transaction_queue = []
         self.opening_time = datetime(2023, 1, 1, 5, 45)
         self.closing_time = datetime(2023, 1, 1, 18, 20)
         self.min_balance = 100000000
@@ -29,20 +38,20 @@ class Bank:
             self.priority_balance += transaction.amount
         else:
             self.non_priority_balance += transaction.amount
-        self.check_min_balance()
         self.update_total_balance()
 
     def outbound_transaction(self, transaction: DatedTransaction):
         if transaction.priority == 1:
             if transaction.amount > self.priority_balance:
-                self.non_priority_balance = self.non_priority_balance - (transaction.amount - self.priority_balance)  # If transaction amount over priority balance then use up non-priority balance
+                self.non_priority_balance = self.non_priority_balance - (
+                            transaction.amount - self.priority_balance)  # If transaction amount over priority balance then use up non-priority balance
                 self.priority_balance = 0
             else:
                 self.priority_balance -= transaction.amount
         else:
             self.non_priority_balance -= transaction.amount
-        self.check_min_balance()
         self.update_total_balance()
+        self.check_min_balance()
 
     def update_total_balance(self):
         self.balance = self.priority_balance + self.non_priority_balance
@@ -52,25 +61,27 @@ class Bank:
             self.min_balance = self.balance
 
     def add_transaction_to_priority_queue(self, transaction):
-        self.priority_transaction_queue.put(transaction)
+        heapq.heappush(self.priority_transaction_queue, (transaction.time, transaction))
 
     def add_transaction_to_non_priority_queue(self, transaction):
-        self.non_priority_transaction_queue.put(transaction)
+        heapq.heappush(self.non_priority_transaction_queue, (transaction.time, transaction))
 
     def pop_transaction_from_priority_queue(self):
-        return self.priority_transaction_queue.get()
+        date, transaction = heapq.heappop(self.priority_transaction_queue)
+        return transaction
 
     def pop_transaction_from_non_priority_queue(self):
-        return self.non_priority_transaction_queue.get()
+        date, transaction = heapq.heappop(self.non_priority_transaction_queue)
+        return transaction
 
     def post_transactions(self, time):
         transactions_to_post = []
 
-        while not self.priority_transaction_queue.empty() and time == self.priority_transaction_queue.queue[0].time:
+        while len(self.priority_transaction_queue) != 0 and time == self.priority_transaction_queue[0][1].time:
             transaction = self.pop_transaction_from_priority_queue()
             transactions_to_post.append(transaction)
 
-        while not self.non_priority_transaction_queue.empty() and time == self.non_priority_transaction_queue.queue[0].time:
+        while len(self.non_priority_transaction_queue) != 0 and time == self.non_priority_transaction_queue[0][1].time:
             transaction = self.pop_transaction_from_non_priority_queue()
             transactions_to_post.append(transaction)
 
@@ -94,9 +105,8 @@ class Bank:
 
 
 class AgentBank(ABC, Bank):
-    def __int__(self, id, name, balance, input_file, delay_amount):
-        super().__init__(id, name, balance)
-        self.delay_amount = delay_amount
+    def __int__(self, id, name, balance, input_file):
+        super().__init__(id, name, balance, input_file)
 
     @abstractmethod
     def check_for_transactions(self, time):
@@ -117,19 +127,68 @@ class NormalBank(AgentBank):
 
 
 class DelayBank(AgentBank):
-    def __init__(self, id, name, balance, input_file, delay_amount):
+    def __init__(self, id, name, balance, input_file, max_delay_amount):
         super().__init__(id, name, balance, input_file)
-        self.delay_amount = delay_amount
+        self.max_delay_amount = max_delay_amount
+        self.num_transactions_delayed = 0
+        self.total_transactions = 0
+        self.timing_delay_kde = self.generate_timing_delay_pdf()[0]
+        self.timing_delay_max_pdf = self.generate_timing_delay_pdf()[1]
+        self.amount_delay_pdf = self.generate_transaction_amount_delay_pdf()[0]
+        self.amount_x_values = self.generate_transaction_amount_delay_pdf()[1]
 
     # Checks for transactions they need to do, then delay and puts them into a separate queue
     def check_for_transactions(self, time):
         while self.transactions_to_do and time == self.transactions_to_do[0].time:
             transaction = self.transactions_to_do.pop(0)
-            transaction.time += timedelta(seconds=self.delay_amount)
-            self.cum_settlement_delay += self.delay_amount
+            delay_benefit = self.calculate_timing_delay_prob(transaction.time) * self.calculate_transaction_delay_weight(transaction.amount)
+            actual_delay = 0
+            if delay_benefit > 0.5:
+                actual_delay = int(self.max_delay_amount * (delay_benefit-0.5) * 2)
+                transaction.time += timedelta(seconds=actual_delay)
+                self.num_transactions_delayed += 1
+            self.total_transactions += 1
+            self.cum_settlement_delay += actual_delay
             if transaction.time > self.closing_time:
                 transaction.time = self.closing_time
             if transaction.priority == 1:
                 self.add_transaction_to_priority_queue(transaction)
             else:
                 self.add_transaction_to_non_priority_queue(transaction)
+
+    def generate_timing_delay_pdf(self):
+        peak1_params = {'mean': 7, 'std_dev': 2}
+        peak2_params = {'mean': 14, 'std_dev': 1.5}
+        size = 1000
+
+        peak1_distribution = norm.rvs(loc=peak1_params['mean'], scale=peak1_params['std_dev'], size=size)
+        peak2_distribution = norm.rvs(loc=peak2_params['mean'], scale=peak2_params['std_dev'], size=int(size/2))
+
+        combined_distribution = np.concatenate([peak1_distribution, peak2_distribution])
+
+        bandwidth = 0.5
+        kde = gaussian_kde(combined_distribution, bw_method=bandwidth)
+
+        lower_limit = convert_datetime_to_decimal(settings.start_time)
+        upper_limit = convert_datetime_to_decimal(settings.end_time)
+
+        peak_x_value = np.linspace(lower_limit, upper_limit, 10000)
+        peak_x_value_at_max = max(kde(peak_x_value))
+
+        #timing_probability = kde.evaluate([convert_datetime_to_decimal(time)])[0] / peak_x_value_at_max
+        return kde, peak_x_value_at_max
+
+    def calculate_timing_delay_prob(self, time):
+        return self.timing_delay_kde.evaluate([convert_datetime_to_decimal(time)])[0] / self.timing_delay_max_pdf
+
+    def generate_transaction_amount_delay_pdf(self):
+        alpha = 2
+        x_values = np.linspace(data_generation_config.min_transaction_amount, data_generation_config.max_transaction_amount, 1000)
+        pdf_values = np.log(x_values) ** alpha / max(np.log(x_values)) ** alpha
+        return pdf_values, x_values
+
+    def calculate_transaction_delay_weight(self, amount):
+        return np.interp(amount, self.amount_x_values, self.amount_delay_pdf)
+
+    def calculate_percentage_transactions_delayed(self):
+        return self.num_transactions_delayed / self.total_transactions

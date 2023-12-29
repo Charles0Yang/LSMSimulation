@@ -36,8 +36,13 @@ class MultipleSimulator:
         return self.collect_metrics(banks)
 
     def compare_delay_behaviour(self):
+        if settings.generate_new_data:
+            generate_data(settings.data_generation_config)
+
         metrics = Metrics()
         original_banks, collected_metrics = simulate_day_transactions(self.banks, metrics)
+        print(original_banks[3].calculate_percentage_transactions_delayed())
+        print(original_banks[4].calculate_percentage_transactions_delayed())
 
         metrics = Metrics()
         normal_banks, collected_metrics = simulate_day_transactions(self.all_normal_banks, metrics)
@@ -46,12 +51,16 @@ class MultipleSimulator:
         no_delay_min_balances = [normal_banks[bank].min_balance for bank in normal_banks]
         bank_balances = list(zip(delay_min_balances, no_delay_min_balances))
 
+        print(no_delay_min_balances)
+        print(delay_min_balances)
+
         for bank in original_banks:
             difference_from_delaying = (bank_balances[bank][0] - bank_balances[bank][1]) / bank_balances[bank][1]
             if difference_from_delaying >= 0:
                 print(f"Bank {original_banks[bank].name} benefited {difference_from_delaying * 100:.2f}% in min liquidity from banks delaying")
             else:
                 print(f"Bank {original_banks[bank].name} lost {difference_from_delaying * 100:.2f}% in min liquidity from banks delaying")
+
 
     def calc_average_min_balance(self, banks):
         total_min_balance = 0

@@ -26,9 +26,7 @@ def generate_data(data_generation_config):
     # Set random transactions equally distributed among all banks
     num_bank_transactions = num_transactions // num_banks
     for bank in banks:
-        amounts = np.random.randint(min_transaction_amount,
-                                    max_transaction_amount,
-                                    num_bank_transactions)
+        amounts = np.clip(np.round(np.random.normal(30, 20, size=num_bank_transactions)), data_generation_config.min_transaction_amount, data_generation_config.max_transaction_amount).astype(int)
         from_banks = np.ones(num_bank_transactions, dtype=int) * bank
         to_banks = np.random.choice(np.delete(banks, bank), num_bank_transactions)
         banks_transactions[bank] = list(zip(from_banks, to_banks, amounts))
