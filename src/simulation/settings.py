@@ -21,8 +21,8 @@ num_passes = 1
 data_generation_config = DataGenerationConfig(
     num_banks=5,
     num_transactions=4000,
-    min_transaction_amount=1,
-    max_transaction_amount=60
+    min_transaction_amount=5,
+    max_transaction_amount=20
 )
 
 day_config = DayConfig(

@@ -1,8 +1,5 @@
-from datetime import datetime
 from src.classes.bank import NormalBank, DelayBank
-from src.classes.transaction import DatedTransaction
 from src.simulation import settings
-from src.utils.csvutils import read_csv
 
 
 def generate_banks(bank_types, starting_balance, input_file):

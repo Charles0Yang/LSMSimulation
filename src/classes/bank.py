@@ -17,6 +17,7 @@ from src.simulation.settings import data_generation_config
 def convert_datetime_to_decimal(date):
     return date.hour + date.minute / 60.0
 
+
 class Bank:
     def __init__(self, id, name, balance, input_file):
         self.id = id
@@ -44,7 +45,7 @@ class Bank:
         if transaction.priority == 1:
             if transaction.amount > self.priority_balance:
                 self.non_priority_balance = self.non_priority_balance - (
-                            transaction.amount - self.priority_balance)  # If transaction amount over priority balance then use up non-priority balance
+                        transaction.amount - self.priority_balance)  # If transaction amount over priority balance then use up non-priority balance
                 self.priority_balance = 0
             else:
                 self.priority_balance -= transaction.amount
@@ -141,10 +142,11 @@ class DelayBank(AgentBank):
     def check_for_transactions(self, time):
         while self.transactions_to_do and time == self.transactions_to_do[0].time:
             transaction = self.transactions_to_do.pop(0)
-            delay_benefit = self.calculate_timing_delay_prob(transaction.time) * self.calculate_transaction_delay_weight(transaction.amount)
+            delay_benefit = self.calculate_timing_delay_prob(
+                transaction.time) * self.calculate_transaction_delay_weight(transaction.amount)
             actual_delay = 0
             if delay_benefit > 0.5:
-                actual_delay = int(self.max_delay_amount * (delay_benefit-0.5) * 2)
+                actual_delay = int(self.max_delay_amount * (delay_benefit - 0.5) * 2)
                 transaction.time += timedelta(seconds=actual_delay)
                 self.num_transactions_delayed += 1
             self.total_transactions += 1
@@ -162,7 +164,7 @@ class DelayBank(AgentBank):
         size = 1000
 
         peak1_distribution = norm.rvs(loc=peak1_params['mean'], scale=peak1_params['std_dev'], size=size)
-        peak2_distribution = norm.rvs(loc=peak2_params['mean'], scale=peak2_params['std_dev'], size=int(size/2))
+        peak2_distribution = norm.rvs(loc=peak2_params['mean'], scale=peak2_params['std_dev'], size=int(size / 2))
 
         combined_distribution = np.concatenate([peak1_distribution, peak2_distribution])
 
@@ -175,7 +177,7 @@ class DelayBank(AgentBank):
         peak_x_value = np.linspace(lower_limit, upper_limit, 10000)
         peak_x_value_at_max = max(kde(peak_x_value))
 
-        #timing_probability = kde.evaluate([convert_datetime_to_decimal(time)])[0] / peak_x_value_at_max
+        # timing_probability = kde.evaluate([convert_datetime_to_decimal(time)])[0] / peak_x_value_at_max
         return kde, peak_x_value_at_max
 
     def calculate_timing_delay_prob(self, time):
@@ -183,7 +185,8 @@ class DelayBank(AgentBank):
 
     def generate_transaction_amount_delay_pdf(self):
         alpha = 2
-        x_values = np.linspace(data_generation_config.min_transaction_amount, data_generation_config.max_transaction_amount, 1000)
+        x_values = np.linspace(data_generation_config.min_transaction_amount,
+                               data_generation_config.max_transaction_amount, 1000)
         pdf_values = np.log(x_values) ** alpha / max(np.log(x_values)) ** alpha
         return pdf_values, x_values
 
@@ -191,4 +194,6 @@ class DelayBank(AgentBank):
         return np.interp(amount, self.amount_x_values, self.amount_delay_pdf)
 
     def calculate_percentage_transactions_delayed(self):
+        if self.total_transactions == 0:
+            return 0
         return self.num_transactions_delayed / self.total_transactions
