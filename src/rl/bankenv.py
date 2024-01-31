@@ -5,7 +5,7 @@ import gymnasium as gym
 import numpy as np
 import pandas as pd
 from gymnasium import spaces
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback
@@ -16,9 +16,9 @@ from src.data_scripts.basic_generation import generate_data
 
 MAX_TRANSACTIONS_QUEUED = 30
 INITIAL_LIQUIDITY = float(1000)
-DELAY_PENALTY = 0.2
-FIXED_REWARD = 2
-DELAY_TIME = 36000000 # seconds
+DELAY_PENALTY = 0.05
+FIXED_REWARD = 0
+DELAY_TIME = 3600  # seconds
 END_TIME = datetime(2023, 1, 1, 18, 20)
 
 
@@ -31,13 +31,14 @@ class ActionDistributionCallback(BaseCallback):
         self.logger.record('train/action_distribution', action_distribution.mean())
         return True
 
+
 class BankEnv(gym.Env):
 
     def __init__(self):
         super(BankEnv, self).__init__()
 
         self.action_space = spaces.Discrete(2)
-        self.observation_space = spaces.Box(low=0, high=np.inf, shape=(2,), dtype=np.float64)
+        self.observation_space = spaces.Box(low=0, high=np.inf, shape=(3,), dtype=np.float64)
         self.current_liquidity = INITIAL_LIQUIDITY
         self.min_liquidity = INITIAL_LIQUIDITY
         self.transactions_queue = Queue()
@@ -50,7 +51,7 @@ class BankEnv(gym.Env):
 
         # Process delayed transactions
         # Get transactions to send at the time
-            # Decide whether to send or postpone
+        # Decide whether to send or postpone
         # Calculate reward
         # Find next transaction to send
         # Calculate how much received in that period
@@ -78,14 +79,14 @@ class BankEnv(gym.Env):
                     else:
                         reward = FIXED_REWARD
                 else:
-                    reward = -transaction.amount * 0.2
+                    reward = -transaction.amount * DELAY_PENALTY
                     transaction.time += timedelta(seconds=DELAY_TIME)
                     for i in range(len(self.transactions)):
                         if transaction.time <= self.transactions[i].time:
                             self.transactions.insert(i, transaction)
                             break
 
-        observation = np.array([self.current_liquidity, transaction_amount])
+        observation = np.array([self.current_liquidity, transaction_amount, self.min_liquidity])
         liquidity_after = self.current_liquidity
 
         next_sending_time = END_TIME
@@ -99,6 +100,8 @@ class BankEnv(gym.Env):
                         receiving_amount += transaction.amount
                     self.transactions = self.transactions[1:]
 
+        self.current_liquidity += receiving_amount
+
         self.time = next_sending_time
         if self.time >= END_TIME:
             self.done = True
@@ -106,9 +109,10 @@ class BankEnv(gym.Env):
         if self.done:
             reward = 0
             for transaction in self.transactions:
-                reward -= transaction.amount
-
-        self.current_liquidity += receiving_amount
+                if transaction.sending_bank_id == self.id:
+                    reward -= transaction.amount
+                    self.min_liquidity -= transaction.amount
+                    self.current_liquidity -= transaction.amount
 
         if len(self.transactions) == 0:
             next_transaction = "None"
@@ -116,7 +120,6 @@ class BankEnv(gym.Env):
             next_transaction = self.transactions[0]
         info = {
         }
-
         return observation, reward, self.done, False, info
 
     def reset(self, seed=None):
@@ -128,7 +131,7 @@ class BankEnv(gym.Env):
         self.transactions = self.get_transactions()
         self.time = self.transactions[0].time
 
-        observation = np.array([INITIAL_LIQUIDITY, 0])
+        observation = np.array([INITIAL_LIQUIDITY, 0, INITIAL_LIQUIDITY])
         info = {}
         return observation, info
 
@@ -139,7 +142,7 @@ class BankEnv(gym.Env):
             min_transaction_amount=5,
             max_transaction_amount=20
         )
-        #generate_data(data_generation_config)
+        generate_data(data_generation_config)
         df = pd.read_csv(f"/Users/cyang/PycharmProjects/PartIIProject/data/synthetic_data/rl/random_data.csv")
         transactions_to_do = df.values.tolist()
         transactions = []
@@ -158,6 +161,7 @@ class BankEnv(gym.Env):
 env = BankEnv()
 episodes = 1
 
+
 def test(env, episodes):
     for episode in range(episodes):
         done = False
@@ -168,10 +172,24 @@ def test(env, episodes):
             print(f"{info['time']}: {info['current_liquidity']}, action: {random_action}, reward: {reward}")
 
 
-logdir = "./ppo_tensorboard"
+def train(env):
+    logdir = "./ppo_tensorboard"
 
-model = PPO('MlpPolicy', env, verbose=1,
-            tensorboard_log=logdir, learning_rate=0.0001)  # python3 -m tensorboard.main --logdir=./ppo_tensorboard
-model.learn(total_timesteps=400000, callback=ActionDistributionCallback())
-obs = model.env.observation_space.sample()
+    model = PPO('MlpPolicy', env, verbose=1,
+                tensorboard_log=logdir, learning_rate=0.00025)  # python3 -m tensorboard.main --logdir=./ppo_tensorboard
+    model.learn(total_timesteps=2000000, callback=ActionDistributionCallback())
+    model.save('./models')
 
+
+def test_model(env):
+    model = PPO.load('./models.zip')
+    obs = env.reset()[0]
+    done = False
+    while not done:
+        action, _ = model.predict(obs)
+        obs, reward, done, truncated, info = env.step(action)
+        print(f"Step: {env.time}, Action: {action}, Reward: {reward}, Current Liquidity: {obs[0]}, Amount: {obs[1]}, MinLiquidity: {env.min_liquidity}")
+    env.close()
+
+
+test_model(env)

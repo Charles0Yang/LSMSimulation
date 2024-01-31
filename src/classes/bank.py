@@ -197,3 +197,8 @@ class DelayBank(AgentBank):
         if self.total_transactions == 0:
             return 0
         return self.num_transactions_delayed / self.total_transactions
+
+class RLBank(AgentBank):
+    def __init__(self, id, name, balance, input_file, delay_amount):
+        super().__init__(id, name, balance, input_file)
+
