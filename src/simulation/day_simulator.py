@@ -25,7 +25,7 @@ def simulate_day_transactions(banks, metrics):
 
         # Get all transactions for all banks at this timestep and put them in relevant central queue
         for bank in banks:
-            banks[bank].check_for_transactions(current_time)
+            banks[bank].check_for_transactions(current_time, metrics)
             bank_transactions = banks[bank].post_transactions(current_time)
             for transaction in bank_transactions:
                 if transaction.priority == 1:
@@ -73,7 +73,7 @@ def simulate_day_transactions(banks, metrics):
         priority_transaction_queue.put(non_priority_transaction_queue.get())
 
     for bank in banks:
-        banks[bank].check_for_transactions(current_time)
+        banks[bank].check_for_transactions(current_time, metrics)
         bank_transactions = banks[bank].post_transactions(current_time)
         for transaction in bank_transactions:
             priority_transaction_queue.put(transaction)
@@ -89,6 +89,7 @@ def simulate_day_transactions(banks, metrics):
 
     metrics.calculate_liquidity_saved_ratio()
     print(f"Liquidity saved: {metrics.liquidity_saved_ratio*100:.2f}%")
+    print(f"Average delay per transactions: {metrics.calculate_average_delay_per_transaction():.2f} minutes")
     write_to_csv(settings.csv_settings.output_file_name, settings.csv_settings.headers, bank_balances)
 
     return banks, metrics

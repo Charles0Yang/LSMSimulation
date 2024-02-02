@@ -111,7 +111,7 @@ class AgentBank(ABC, Bank):
         super().__init__(id, name, balance, input_file)
 
     @abstractmethod
-    def check_for_transactions(self, time):
+    def check_for_transactions(self, time, metrics):
         pass
 
 
@@ -119,9 +119,10 @@ class NormalBank(AgentBank):
     def __init__(self, id, name, balance, input_file):
         super().__init__(id, name, balance, input_file)
 
-    def check_for_transactions(self, time):
+    def check_for_transactions(self, time, metrics):
         while self.transactions_to_do and time == self.transactions_to_do[0].time:
             transaction = self.transactions_to_do.pop(0)
+            metrics.add_transaction()
             if transaction.priority == 1:
                 self.add_transaction_to_priority_queue(transaction)
             else:
@@ -133,6 +134,7 @@ class DelayBank(AgentBank):
         super().__init__(id, name, balance, input_file)
         self.max_delay_amount = max_delay_amount
         self.num_transactions_delayed = 0
+        self.total_time_delay = 0 # seconds
         self.total_transactions = 0
 
     def calculate_percentage_transactions_delayed(self):
@@ -140,7 +142,10 @@ class DelayBank(AgentBank):
             return 0
         return self.num_transactions_delayed / self.total_transactions
 
-    def check_for_transactions(self, time):
+    def calculate_average_delay_per_transaction(self):
+        return (self.total_time_delay / 60) / self.total_transactions # minutes
+
+    def check_for_transactions(self, time, metrics):
         while self.transactions_to_do and time == self.transactions_to_do[0].time:
             transaction = self.transactions_to_do.pop(0)
             delay_benefit = self.calculate_delay_benefit(transaction.time, transaction.amount)
@@ -149,10 +154,13 @@ class DelayBank(AgentBank):
                 actual_delay = int(self.max_delay_amount * (delay_benefit - 0.5) * 2)
                 transaction.time += timedelta(seconds=actual_delay)
                 self.num_transactions_delayed += 1
+                self.total_time_delay += actual_delay
+                metrics.add_bank_delay(actual_delay)
             self.total_transactions += 1
             self.cum_settlement_delay += actual_delay
             if transaction.time > self.closing_time:
                 transaction.time = self.closing_time
+            metrics.add_transaction()
             if transaction.priority == 1:
                 self.add_transaction_to_priority_queue(transaction)
             else:
