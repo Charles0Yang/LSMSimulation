@@ -41,8 +41,8 @@ class MultipleSimulator:
 
         metrics = Metrics()
         original_banks, collected_metrics = simulate_day_transactions(self.banks, metrics)
-        print(original_banks[3].calculate_percentage_transactions_delayed())
-        print(original_banks[4].calculate_percentage_transactions_delayed())
+        for i in range(3, len(original_banks)):
+            print(f"Bank {original_banks[i].name} delayed {original_banks[i].calculate_percentage_transactions_delayed() * 100:.2f}% of transactions")
 
         metrics = Metrics()
         normal_banks, collected_metrics = simulate_day_transactions(self.all_normal_banks, metrics)

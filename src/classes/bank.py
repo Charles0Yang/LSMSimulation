@@ -1,5 +1,6 @@
 import numpy as np
 from scipy import integrate
+from stable_baselines3 import PPO
 
 from src.classes.configs.data_generation_config import DataGenerationConfig
 from src.classes.transaction import DatedTransaction
@@ -133,17 +134,16 @@ class DelayBank(AgentBank):
         self.max_delay_amount = max_delay_amount
         self.num_transactions_delayed = 0
         self.total_transactions = 0
-        self.timing_delay_kde = self.generate_timing_delay_pdf()[0]
-        self.timing_delay_max_pdf = self.generate_timing_delay_pdf()[1]
-        self.amount_delay_pdf = self.generate_transaction_amount_delay_pdf()[0]
-        self.amount_x_values = self.generate_transaction_amount_delay_pdf()[1]
 
-    # Checks for transactions they need to do, then delay and puts them into a separate queue
+    def calculate_percentage_transactions_delayed(self):
+        if self.total_transactions == 0:
+            return 0
+        return self.num_transactions_delayed / self.total_transactions
+
     def check_for_transactions(self, time):
         while self.transactions_to_do and time == self.transactions_to_do[0].time:
             transaction = self.transactions_to_do.pop(0)
-            delay_benefit = self.calculate_timing_delay_prob(
-                transaction.time) * self.calculate_transaction_delay_weight(transaction.amount)
+            delay_benefit = self.calculate_delay_benefit(transaction.time, transaction.amount)
             actual_delay = 0
             if delay_benefit > 0.5:
                 actual_delay = int(self.max_delay_amount * (delay_benefit - 0.5) * 2)
@@ -157,6 +157,18 @@ class DelayBank(AgentBank):
                 self.add_transaction_to_priority_queue(transaction)
             else:
                 self.add_transaction_to_non_priority_queue(transaction)
+
+    def calculate_delay_benefit(self, time, amount):
+        pass
+
+
+class RuleBasedDelayBank(DelayBank):
+    def __init__(self, id, name, balance, input_file, max_delay_amount):
+        super().__init__(id, name, balance, input_file, max_delay_amount)
+        self.timing_delay_kde = self.generate_timing_delay_pdf()[0]
+        self.timing_delay_max_pdf = self.generate_timing_delay_pdf()[1]
+        self.amount_delay_pdf = self.generate_transaction_amount_delay_pdf()[0]
+        self.amount_x_values = self.generate_transaction_amount_delay_pdf()[1]
 
     def generate_timing_delay_pdf(self):
         peak1_params = {'mean': 7, 'std_dev': 2}
@@ -180,9 +192,6 @@ class DelayBank(AgentBank):
         # timing_probability = kde.evaluate([convert_datetime_to_decimal(time)])[0] / peak_x_value_at_max
         return kde, peak_x_value_at_max
 
-    def calculate_timing_delay_prob(self, time):
-        return self.timing_delay_kde.evaluate([convert_datetime_to_decimal(time)])[0] / self.timing_delay_max_pdf
-
     def generate_transaction_amount_delay_pdf(self):
         alpha = 2
         x_values = np.linspace(data_generation_config.min_transaction_amount,
@@ -190,15 +199,24 @@ class DelayBank(AgentBank):
         pdf_values = np.log(x_values) ** alpha / max(np.log(x_values)) ** alpha
         return pdf_values, x_values
 
+    def calculate_timing_delay_prob(self, time):
+        return self.timing_delay_kde.evaluate([convert_datetime_to_decimal(time)])[0] / self.timing_delay_max_pdf
+
     def calculate_transaction_delay_weight(self, amount):
         return np.interp(amount, self.amount_x_values, self.amount_delay_pdf)
 
-    def calculate_percentage_transactions_delayed(self):
-        if self.total_transactions == 0:
-            return 0
-        return self.num_transactions_delayed / self.total_transactions
+    def calculate_delay_benefit(self, time, amount):
+        return self.calculate_timing_delay_prob(time) * self.calculate_transaction_delay_weight(amount)
 
-class RLBank(AgentBank):
+
+class RLDelayBank(DelayBank):
     def __init__(self, id, name, balance, input_file, delay_amount):
-        super().__init__(id, name, balance, input_file)
+        super().__init__(id, name, balance, input_file, delay_amount)
+        self.model = PPO.load("/Users/cyang/PycharmProjects/PartIIProject/src/rl/models.zip")
+
+    def calculate_delay_benefit(self, time, amount):
+        obs = np.array([self.balance, amount, self.min_balance])
+        action, _ = self.model.predict(obs)
+        return int(action)
+
 
