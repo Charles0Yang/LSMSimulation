@@ -51,6 +51,14 @@ def simulate_day_transactions(banks, metrics):
                 non_priority_transaction_queue = matching.multilateral_offsetting(metrics)
                 matching_window = -20 # Cycle takes 20 seconds complete
 
+            else:
+                # Add delay to transactions
+                for transaction in list(priority_transaction_queue.queue):
+                    banks[transaction.sending_bank_id].add_delay()
+
+                for transaction in list (non_priority_transaction_queue.queue):
+                    banks[transaction.sending_bank_id].add_delay()
+
             matching_window += 1
 
         else:
