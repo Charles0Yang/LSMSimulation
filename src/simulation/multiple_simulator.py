@@ -40,14 +40,15 @@ class MultipleSimulator:
             generate_data(settings.data_generation_config)
 
         metrics = Metrics()
+        normal_banks, collected_metrics = simulate_day_transactions(self.all_normal_banks, metrics)
+        metrics = Metrics()
         original_banks, collected_metrics = simulate_day_transactions(self.banks, metrics)
+
         for i in range(3, len(original_banks)):
             print(f"Bank {original_banks[i].name} delayed {original_banks[i].calculate_percentage_transactions_delayed() * 100:.2f}% of transactions")
 
         for i in range(0, len(original_banks)):
             print(f"Bank {original_banks[i].name} delayed {original_banks[i].calculate_average_delay_per_transaction():.2f} minutes per transaction on average")
-        metrics = Metrics()
-        normal_banks, collected_metrics = simulate_day_transactions(self.all_normal_banks, metrics)
 
         delay_min_balances = [original_banks[bank].min_balance for bank in original_banks]
         no_delay_min_balances = [normal_banks[bank].min_balance for bank in normal_banks]

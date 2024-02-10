@@ -32,7 +32,7 @@ class Bank:
         self.non_priority_transaction_queue = []
         self.opening_time = datetime(2023, 1, 1, 5, 45)
         self.closing_time = datetime(2023, 1, 1, 18, 20)
-        self.min_balance = 100000000
+        self.min_balance = balance
         self.cum_settlement_delay = 0
 
     def inbound_transaction(self, transaction: DatedTransaction):
@@ -234,28 +234,40 @@ class RLDelayBank(DelayBank):
         action, _ = self.model.predict(obs)
         return int(action)
 
+
 class DelayWhenConvenientBank(DelayBank):
     def __init__(self, id, name, balance, input_file, delay_amount):
         super().__init__(id, name, balance, input_file, delay_amount)
+        self.extra_holding_queue = Queue()
+
+    def inbound_transaction(self, transaction: DatedTransaction):
+        print(f"{transaction.time}: Receiving transaction {transaction}")
+        if transaction.priority == 1:
+            self.priority_balance += transaction.amount
+        else:
+            self.non_priority_balance += transaction.amount
+        self.update_total_balance()
 
     def check_for_transactions(self, time, metrics):
         while self.transactions_to_do and time == self.transactions_to_do[0].time:
             transaction = self.transactions_to_do.pop(0)
-            delay_benefit = self.calculate_delay_benefit(transaction.time, transaction.amount)
-            actual_delay = 0
-            if delay_benefit > 0.5:
-                actual_delay = int(self.max_delay_amount * (delay_benefit - 0.5) * 2)
-                transaction.time += timedelta(seconds=actual_delay)
-                self.num_transactions_delayed += 1
-                self.total_time_delay += actual_delay
-                metrics.add_bank_delay(actual_delay)
             self.total_transactions += 1
-            self.cum_settlement_delay += actual_delay
-            if transaction.time > self.closing_time:
-                transaction.time = self.closing_time
             metrics.add_transaction()
-            if transaction.priority == 1:
-                self.add_transaction_to_priority_queue(transaction)
-            else:
-                self.add_transaction_to_non_priority_queue(transaction)
+            print(f"{time}: Plan on transaction {transaction} with balance currently at {self.balance}, min balance is {self.min_balance}")
+            self.extra_holding_queue.put(transaction)
+
+        if not self.extra_holding_queue.empty():
+            top_transaction = self.extra_holding_queue.get()
+            temp_balance = self.balance
+            while not self.extra_holding_queue.empty() and temp_balance - top_transaction.amount >= self.min_balance:
+                print(f"{time}: Delivering transaction {top_transaction}, balance after transaction is {temp_balance - top_transaction.amount}")
+                temp_balance -= top_transaction.amount
+                if top_transaction.priority == 1:
+                    self.add_transaction_to_priority_queue(top_transaction)
+                else:
+                    self.add_transaction_to_non_priority_queue(top_transaction)
+
+        self.total_time_delay += self.extra_holding_queue.qsize()
+        metrics.add_bank_delay(self.extra_holding_queue.qsize())
+
 
