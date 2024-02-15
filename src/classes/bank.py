@@ -91,7 +91,7 @@ class Bank:
 
     def get_transactions(self, file_name):
         df = pd.read_csv(f"/Users/cyang/PycharmProjects/PartIIProject/data/synthetic_data/{file_name}")
-        transactions_to_do = df[df['from'] == self.id].iloc[1:].values.tolist()
+        transactions_to_do = df[df['from'] == self.id].iloc[0:].values.tolist()
         transactions = []
         for row in transactions_to_do:
             time = datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S")
@@ -103,6 +103,7 @@ class Bank:
             transaction = DatedTransaction(sending_bank_id, receiving_bank_id, amount, time, priority)
             transactions.append(transaction)
 
+        print(transactions)
         return transactions
 
 
@@ -116,6 +117,8 @@ class AgentBank(ABC, Bank):
         self.total_time_delay += 1
 
     def calculate_average_delay_per_transaction(self):
+        if self.total_transactions == 0:
+            return 0
         return (self.total_time_delay / 60) / self.total_transactions # minutes
 
     @abstractmethod
@@ -148,9 +151,6 @@ class DelayBank(AgentBank):
         if self.total_transactions == 0:
             return 0
         return self.num_transactions_delayed / self.total_transactions
-
-    def calculate_average_delay_per_transaction(self):
-        return (self.total_time_delay / 60) / self.total_transactions # minutes
 
     def check_for_transactions(self, time, metrics):
         while self.transactions_to_do and time == self.transactions_to_do[0].time:
@@ -240,27 +240,43 @@ class DelayWhenConvenientBank(DelayBank):
         super().__init__(id, name, balance, input_file, delay_amount)
         self.extra_holding_queue = Queue()
 
-    def inbound_transaction(self, transaction: DatedTransaction):
-        print(f"{transaction.time}: Receiving transaction {transaction}")
-        if transaction.priority == 1:
-            self.priority_balance += transaction.amount
-        else:
-            self.non_priority_balance += transaction.amount
-        self.update_total_balance()
+    def acheck_for_transactions(self, time, metrics):
+        while self.transactions_to_do and time >= self.transactions_to_do[0].time:
+            if self.balance - self.transactions_to_do[0].amount >= self.min_balance:
+                transaction = self.transactions_to_do.pop(0)
+
+                self.total_transactions += 1
+                metrics.add_transaction()
+
+                if transaction.time != time:
+                    self.cum_settlement_delay += (transaction.time - time).total_seconds()
+                    self.num_transactions_delayed += 1
+                    self.total_time_delay += (transaction.time - time).total_seconds()
+
+                if transaction.priority == 1:
+                    self.add_transaction_to_priority_queue(transaction)
+                else:
+                    self.add_transaction_to_non_priority_queue(transaction)
+            else:
+                print(f"{time}: Transactions to do: {self.transactions_to_do}")
+                break
 
     def check_for_transactions(self, time, metrics):
         while self.transactions_to_do and time == self.transactions_to_do[0].time:
+            print(self.transactions_to_do)
             transaction = self.transactions_to_do.pop(0)
             self.total_transactions += 1
             metrics.add_transaction()
-            print(f"{time}: Plan on transaction {transaction} with balance currently at {self.balance}, min balance is {self.min_balance}")
+            print(
+                f"{time}: Plan on transaction {transaction} with balance currently at {self.balance}, min balance is {self.min_balance}")
             self.extra_holding_queue.put(transaction)
 
         if not self.extra_holding_queue.empty():
             top_transaction = self.extra_holding_queue.get()
             temp_balance = self.balance
             while not self.extra_holding_queue.empty() and temp_balance - top_transaction.amount >= self.min_balance:
-                print(f"{time}: Delivering transaction {top_transaction}, balance after transaction is {temp_balance - top_transaction.amount}")
+                print(
+                    f"{time}: Delivering transaction {top_transaction}, balance after transaction is {temp_balance - top_transaction.amount}")
                 temp_balance -= top_transaction.amount
                 if top_transaction.priority == 1:
                     self.add_transaction_to_priority_queue(top_transaction)

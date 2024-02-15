@@ -7,7 +7,7 @@ from src.classes.configs.csv_config import CSVSettings
 from src.classes.configs.data_generation_config import DataGenerationConfig
 from src.classes.configs.day_config import DayConfig
 
-generate_new_data = True
+generate_new_data = False
 
 start_time = datetime(2023, 1, 1, 5, 45)
 end_time = datetime(2023, 1, 1, 18, 20)
