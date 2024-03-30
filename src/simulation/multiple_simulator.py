@@ -1,9 +1,8 @@
 from src.data_scripts.basic_generation import generate_data
-from src.metrics import Metrics
+from src.simulation.metrics import Metrics
 from src.simulation import settings
 from src.simulation.day_simulator import simulate_day_transactions
 from src.simulation.setup import generate_banks
-import numpy as np
 
 
 # Goal of this class is to take in configs and number of days to run simulator then return relevant metrics
@@ -44,10 +43,11 @@ class MultipleSimulator:
         metrics = Metrics()
         original_banks, collected_metrics = simulate_day_transactions(self.banks, metrics)
 
+
         for i in range(3, len(original_banks)):
             print(f"Bank {original_banks[i].name} delayed {original_banks[i].calculate_percentage_transactions_delayed() * 100:.2f}% of transactions")
 
-        for i in range(0, len(original_banks)):
+        for i in range(3, len(original_banks)):
             print(f"Bank {original_banks[i].name} delayed {original_banks[i].calculate_average_delay_per_transaction():.2f} minutes per transaction on average")
 
         delay_min_balances = [original_banks[bank].min_balance for bank in original_banks]
@@ -63,7 +63,6 @@ class MultipleSimulator:
                 print(f"Bank {original_banks[bank].name} benefited {difference_from_delaying * 100:.2f}% in min liquidity from banks delaying")
             else:
                 print(f"Bank {original_banks[bank].name} lost {difference_from_delaying * 100:.2f}% in min liquidity from banks delaying")
-
 
     def calc_average_min_balance(self, banks):
         total_min_balance = 0

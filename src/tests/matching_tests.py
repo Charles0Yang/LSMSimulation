@@ -3,7 +3,7 @@ from queue import Queue
 
 from src.classes.bank import NormalBank
 from src.classes.transaction import DatedTransaction
-from src.matching import Matching
+from src.simulation.matching import Matching
 from src.simulation.day_simulator import fetch_all_bank_balances
 
 

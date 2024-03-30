@@ -1,7 +1,5 @@
-from datetime import datetime
-
 from src.classes.bank import DelayWhenConvenientBank, NormalBank
-from src.metrics import Metrics
+from src.simulation.metrics import Metrics
 from src.simulation.day_simulator import simulate_day_transactions
 
 

@@ -246,8 +246,6 @@ class DelayWhenConvenientBank(DelayBank):
             transaction = self.transactions_to_do.pop(0)
             self.total_transactions += 1
             metrics.add_transaction()
-            print(
-                f"{time}: Plan on transaction {transaction} with balance currently at {self.balance}, min balance is {self.min_balance}")
             self.extra_holding_queue.put(transaction)
 
         if not self.extra_holding_queue.empty():
@@ -260,8 +258,8 @@ class DelayWhenConvenientBank(DelayBank):
                 temp_balance = temp_balance - top_transaction.amount
                 if temp_balance < temp_min_balance:
                     temp_min_balance = temp_balance
-                print(
-                    f"{time}: Delivering transaction {top_transaction}, balance before transaction is {balance_before_transaction}, balance after transaction is {temp_balance}")
+                if top_transaction.time != time:
+                    self.num_transactions_delayed += 1
                 top_transaction.time = time
                 top_transaction.priority = 1
                 self.add_transaction_to_priority_queue(top_transaction)
@@ -272,16 +270,25 @@ class DelayWhenConvenientBank(DelayBank):
         self.total_time_delay += self.extra_holding_queue.qsize()
         metrics.add_bank_delay(self.extra_holding_queue.qsize())
 
-    def outbound_transaction(self, transaction: DatedTransaction):
-        if transaction.priority == 1:
-            if transaction.amount > self.priority_balance:
-                self.non_priority_balance = self.non_priority_balance - (
-                        transaction.amount - self.priority_balance)  # If transaction amount over priority balance then use up non-priority balance
-                self.priority_balance = 0
+    def checks_for_transactions(self, time, metrics):
+        temp_balance = self.balance
+        while self.transactions_to_do and time >= self.transactions_to_do[0].time:
+            if temp_balance - self.transactions_to_do[0].amount >= self.min_balance:
+                transaction = self.transactions_to_do.pop(0)
+                self.total_transactions += 1
+                metrics.add_transaction()
+                transaction.time = time
+                transaction.priority = 1
+                self.add_transaction_to_priority_queue(transaction)
+                temp_balance -= transaction.amount
             else:
-                self.priority_balance -= transaction.amount
-        else:
-            self.non_priority_balance -= transaction.amount
-        self.update_total_balance()
-        self.check_min_balance()
-        print(f"{transaction.time}: Sending {transaction}")
+                for transaction in self.transactions_to_do:
+                    if transaction.time == time:
+                        self.num_transactions_delayed += 1
+                        self.total_time_delay += 1
+                        metrics.add_bank_delay(1)
+                    elif transaction.time > time:
+                        self.total_time_delay += 1
+                        metrics.add_bank_delay(1)
+                break
+

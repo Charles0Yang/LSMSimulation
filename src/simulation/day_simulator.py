@@ -1,7 +1,6 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from queue import Queue
-from src.matching import Matching
-from src.metrics import Metrics
+from src.simulation.matching import Matching
 from src.simulation import settings
 from src.utils.csvutils import write_to_csv
 
@@ -56,8 +55,10 @@ def simulate_day_transactions(banks, metrics):
                 for transaction in list(priority_transaction_queue.queue):
                     banks[transaction.sending_bank_id].add_delay()
 
-                for transaction in list (non_priority_transaction_queue.queue):
+                for transaction in list(non_priority_transaction_queue.queue):
                     banks[transaction.sending_bank_id].add_delay()
+
+                metrics.add_bank_delay(priority_transaction_queue.qsize() + non_priority_transaction_queue.qsize())
 
             matching_window += 1
 
@@ -95,9 +96,9 @@ def simulate_day_transactions(banks, metrics):
     current_bank_balances = [current_time + timedelta(seconds=1200)] + fetch_all_bank_balances(banks)
     bank_balances.append(current_bank_balances)
 
-    #metrics.calculate_liquidity_saved_ratio()
-    #print(f"Liquidity saved: {metrics.liquidity_saved_ratio*100:.2f}%")
-    #print(f"Average delay per transactions: {metrics.calculate_average_delay_per_transaction():.2f} minutes")
+    metrics.calculate_liquidity_saved_ratio()
+    print(f"Liquidity saved: {metrics.liquidity_saved_ratio*100:.2f}%")
+    print(f"Average delay per transactions: {metrics.calculate_average_delay_per_transaction():.2f} minutes")
     write_to_csv(settings.csv_settings.output_file_name, settings.csv_settings.headers, bank_balances)
 
     return banks, metrics

@@ -1,6 +1,6 @@
 from datetime import timedelta
 from queue import Queue
-import json
+import resource
 
 from src.classes.bank import Bank
 from src.classes.transaction import DatedTransaction
@@ -29,6 +29,7 @@ class Matching:
     def naive_bilateral_matching(self):
         send_receive_pairs = {}
         transactions = list(self.transaction_queue.queue)
+        transactions_to_redo = Queue()
         while not self.transaction_queue.empty():
             transaction = self.transaction_queue.get()
 
@@ -53,13 +54,14 @@ class Matching:
 
             while self.banks[sending_bank_id].balance - amount < 0:
                 transaction_to_remove = self.remove_bank_last_transaction(transactions, sending_bank_id)
+                transactions_to_redo.put(transaction_to_remove)
                 amount -= transaction_to_remove.amount
 
-            transaction = DatedTransaction(sending_bank_id, receiving_bank_id, amount, self.time)
+            transaction = DatedTransaction(sending_bank_id, receiving_bank_id, amount, self.time, 0)
             self.banks[sending_bank_id].outbound_transaction(transaction)
             self.banks[receiving_bank_id].inbound_transaction(transaction)
 
-        return Queue()
+        return transactions_to_redo
 
     def graph_bilateral_offsetting(self):
 
@@ -89,7 +91,9 @@ class Matching:
             sending_bank.outbound_transaction(transaction)
             receiving_bank.inbound_transaction(transaction)
 
-    def bilateral_offsetting(self):
+        return transactions_to_do
+
+    def bilateral_offsetting(self, metrics):
         send_receive_pairs = {}
         transactions = list(self.transaction_queue.queue)
         carryover_transactions = Queue()
@@ -120,7 +124,7 @@ class Matching:
                 amount -= transaction_to_remove.amount
                 carryover_transactions.put(transaction_to_remove)
 
-            transaction = DatedTransaction(sending_bank_id, receiving_bank_id, amount, self.time)
+            transaction = DatedTransaction(sending_bank_id, receiving_bank_id, amount, self.time, 0)
             self.banks[sending_bank_id].outbound_transaction(transaction)
             self.banks[receiving_bank_id].inbound_transaction(transaction)
 
@@ -159,7 +163,6 @@ class Matching:
 
         raw_balances_after = [balances[bank] for bank in balances]
         metrics.add_to_liquidity_and_transaction_volumes(raw_balances_before, raw_balances_after, transactions_to_do)
-
         return self.transaction_queue
 
     def remove_bank_last_transaction(self, transactions, bank_id):
