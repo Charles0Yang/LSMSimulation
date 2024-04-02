@@ -17,7 +17,6 @@ def convert_seconds_to_datetime(seconds):
 
 def generate_characteristic_times(num_transactions):
     # Generate synthetic data for demonstration in seconds since datetime(2023, 1, 1, 0, 0, 0)
-    np.random.seed(42)
     data = np.concatenate([
         np.random.normal(6 * 3600, 3600, 500),  # increasing transactions between 6-8
         np.random.normal(8 * 3600, 3600, 500),  # decreasing transactions until 12

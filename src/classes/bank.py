@@ -241,7 +241,7 @@ class DelayWhenConvenientBank(DelayBank):
         self.priority_balance = self.balance
         self.non_priority_balance = 0
 
-    def check_for_transactions(self, time, metrics):
+    def checks_for_transactions(self, time, metrics):
         while self.transactions_to_do and time == self.transactions_to_do[0].time:
             transaction = self.transactions_to_do.pop(0)
             self.total_transactions += 1
@@ -270,25 +270,20 @@ class DelayWhenConvenientBank(DelayBank):
         self.total_time_delay += self.extra_holding_queue.qsize()
         metrics.add_bank_delay(self.extra_holding_queue.qsize())
 
-    def checks_for_transactions(self, time, metrics):
+    def check_for_transactions(self, time, metrics):
         temp_balance = self.balance
         while self.transactions_to_do and time >= self.transactions_to_do[0].time:
             if temp_balance - self.transactions_to_do[0].amount >= self.min_balance:
                 transaction = self.transactions_to_do.pop(0)
                 self.total_transactions += 1
+                if time > transaction.time:
+                    self.num_transactions_delayed += 1
+                    self.total_time_delay += (time - transaction.time).total_seconds()
                 metrics.add_transaction()
                 transaction.time = time
                 transaction.priority = 1
                 self.add_transaction_to_priority_queue(transaction)
                 temp_balance -= transaction.amount
             else:
-                for transaction in self.transactions_to_do:
-                    if transaction.time == time:
-                        self.num_transactions_delayed += 1
-                        self.total_time_delay += 1
-                        metrics.add_bank_delay(1)
-                    elif transaction.time > time:
-                        self.total_time_delay += 1
-                        metrics.add_bank_delay(1)
                 break
 

@@ -1,34 +1,39 @@
 from datetime import datetime, timedelta
 from queue import Queue
+from collections import defaultdict
 
 import gymnasium as gym
 import numpy as np
 import pandas as pd
 from gymnasium import spaces
-from stable_baselines3 import PPO, DQN
+from stable_baselines3 import PPO, DQN, A2C
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.monitor import Monitor
 
 from src.classes.configs.data_generation_config import DataGenerationConfig
 from src.classes.transaction import DatedTransaction
 from src.data_scripts.basic_generation import generate_data
 
-MAX_TRANSACTIONS_QUEUED = 30
+MAX_TRANSACTIONS_QUEUED = 100
 INITIAL_LIQUIDITY = float(1000)
 DELAY_PENALTY = 0.05
 FIXED_REWARD = 0
 DELAY_TIME = 3600  # seconds
 END_TIME = datetime(2023, 1, 1, 18, 20)
 
-
 class ActionDistributionCallback(BaseCallback):
     def __init__(self, verbose=0):
         super(ActionDistributionCallback, self).__init__(verbose)
+        self.actions = []
 
     def _on_step(self) -> bool:
         action_distribution = np.array(self.model.predict(self.model.observation_space.sample())[0])
-        self.logger.record('train/action_distribution', action_distribution.mean())
+        self.actions.append(int(action_distribution))
+        if self.num_timesteps % 1000 == 0:
+            self.logger.record('train/action_distribution', sum(self.actions)/len(self.actions))
+            self.actions = []
         return True
 
 
@@ -74,7 +79,7 @@ class BankEnv(gym.Env):
                 if action == 0:  # Send through the payment
                     self.current_liquidity -= transaction.amount
                     if self.current_liquidity < self.min_liquidity:
-                        reward = self.current_liquidity - self.min_liquidity
+                        reward = self.current_liquidity - self.min_liquidity + FIXED_REWARD
                         self.min_liquidity = self.current_liquidity
                     else:
                         reward = FIXED_REWARD
@@ -175,9 +180,9 @@ def test(env, episodes):
 def train(env):
     logdir = "./ppo_tensorboard"
 
-    model = PPO('MlpPolicy', env, verbose=1,
-                tensorboard_log=logdir, learning_rate=0.00025)  # python3 -m tensorboard.main --logdir=./ppo_tensorboard
-    model.learn(total_timesteps=2000000, callback=ActionDistributionCallback())
+    model = A2C('MlpPolicy', env, verbose=1,
+                tensorboard_log=logdir, learning_rate=0.00015)  # python3 -m tensorboard.main --logdir=./ppo_tensorboard
+    model.learn(total_timesteps=200000, callback=ActionDistributionCallback())
     model.save('./models')
 
 
@@ -192,4 +197,4 @@ def test_model(env):
     env.close()
 
 
-test_model(env)
+train(env)
