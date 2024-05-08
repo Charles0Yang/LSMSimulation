@@ -1,3 +1,4 @@
+import bisect
 from datetime import datetime, timedelta
 from queue import Queue
 from collections import defaultdict
@@ -13,27 +14,41 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.monitor import Monitor
 
 from src.classes.configs.data_generation_config import DataGenerationConfig
-from src.classes.transaction import DatedTransaction
+from src.classes.payment import DatedTransaction
 from src.data_scripts.basic_generation import generate_data
 
 MAX_TRANSACTIONS_QUEUED = 100
 INITIAL_LIQUIDITY = float(1000)
-DELAY_PENALTY = 0.05
+DELAY_PENALTY = 0
 FIXED_REWARD = 0
-DELAY_TIME = 3600  # seconds
+DELAY_TIME = 1800  # seconds
 END_TIME = datetime(2023, 1, 1, 18, 20)
+LSM = True
 
 class ActionDistributionCallback(BaseCallback):
     def __init__(self, verbose=0):
         super(ActionDistributionCallback, self).__init__(verbose)
         self.actions = []
 
+    
     def _on_step(self) -> bool:
-        action_distribution = np.array(self.model.predict(self.model.observation_space.sample())[0])
+        action_distribution = int(np.array(self.locals.get('actions')))
         self.actions.append(int(action_distribution))
         if self.num_timesteps % 1000 == 0:
             self.logger.record('train/action_distribution', sum(self.actions)/len(self.actions))
             self.actions = []
+        return True
+
+
+
+class ActionMonitorCallback(BaseCallback):
+    def __init__(self, verbose=0):
+        super(ActionMonitorCallback, self).__init__(verbose)
+
+    def _on_step(self) -> bool:
+        # Get the actions taken by the model
+        actions = self.locals.get('actions')
+        self.logger.record('train/actions', actions)
         return True
 
 
@@ -47,6 +62,7 @@ class BankEnv(gym.Env):
         self.current_liquidity = INITIAL_LIQUIDITY
         self.min_liquidity = INITIAL_LIQUIDITY
         self.transactions_queue = Queue()
+        self.non_priority_queue = Queue()
         self.transactions = self.get_transactions()
         self.id = 0
         self.time = self.transactions[0]
@@ -71,27 +87,43 @@ class BankEnv(gym.Env):
         transaction_amount = 0
         receiving_amount = 0
         reward = 0
+        non_priority = False
         while self.transactions and self.transactions[0].time == self.time:
             transaction = self.transactions[0]
             self.transactions = self.transactions[1:]
             if transaction.sending_bank_id == self.id:
                 transaction_amount = transaction.amount
                 if action == 0:  # Send through the payment
-                    self.current_liquidity -= transaction.amount
-                    if self.current_liquidity < self.min_liquidity:
-                        reward = self.current_liquidity - self.min_liquidity + FIXED_REWARD
-                        self.min_liquidity = self.current_liquidity
+                    if LSM:
+                        if transaction.priority == 1:
+                            self.current_liquidity -= transaction.amount
+                            if self.current_liquidity < self.min_liquidity:
+                                reward = self.current_liquidity - self.min_liquidity + FIXED_REWARD * transaction_amount
+                                self.min_liquidity = self.current_liquidity
+                            else:
+                                reward = FIXED_REWARD * transaction_amount
+                        else: # If transaction is non-priority add to offsetting queue
+                            self.non_priority_queue.put(transaction)
+                            non_priority = True
                     else:
-                        reward = FIXED_REWARD
+                        self.current_liquidity -= transaction.amount
+                        if self.current_liquidity < self.min_liquidity:
+                            reward = self.current_liquidity - self.min_liquidity + FIXED_REWARD * transaction_amount
+                            self.min_liquidity = self.current_liquidity
+                        else:
+                            reward = FIXED_REWARD * transaction_amount
                 else:
                     reward = -transaction.amount * DELAY_PENALTY
                     transaction.time += timedelta(seconds=DELAY_TIME)
+                    #insert_index = bisect.bisect_left([t.time for t in self.transactions], transaction.time)
+                    #self.transactions.insert(insert_index, transaction)
+
                     for i in range(len(self.transactions)):
                         if transaction.time <= self.transactions[i].time:
                             self.transactions.insert(i, transaction)
                             break
 
-        observation = np.array([self.current_liquidity, transaction_amount, self.min_liquidity])
+        #observation = np.array([self.current_liquidity, transaction_amount, self.min_liquidity])
         liquidity_after = self.current_liquidity
 
         next_sending_time = END_TIME
@@ -101,11 +133,31 @@ class BankEnv(gym.Env):
                     next_sending_time = transaction.time
                     break
                 else:
-                    if transaction.receiving_bank_id == self.id:
+                    if transaction.receiving_bank_id == self.id and transaction.priority == 1:
                         receiving_amount += transaction.amount
+                    else:
+                        self.non_priority_queue.put(transaction)
                     self.transactions = self.transactions[1:]
 
+        if LSM and non_priority:
+            balance_agent = 0
+            while not self.non_priority_queue.empty():
+                transaction = self.non_priority_queue.get()
+                if transaction.sending_bank_id == self.id:
+                    balance_agent -= transaction.amount
+                else:
+                    balance_agent += transaction_amount
+
+            if non_priority:
+                self.current_liquidity += balance_agent
+                if self.current_liquidity < self.min_liquidity:
+                    reward = self.current_liquidity - self.min_liquidity + FIXED_REWARD
+                    self.min_liquidity = self.current_liquidity
+                else:
+                    reward = transaction_amount * FIXED_REWARD
+
         self.current_liquidity += receiving_amount
+        observation = np.array([self.current_liquidity, transaction_amount, self.min_liquidity])
 
         self.time = next_sending_time
         if self.time >= END_TIME:
@@ -144,8 +196,8 @@ class BankEnv(gym.Env):
         data_generation_config = DataGenerationConfig(
             num_banks=2,
             num_transactions=4000,
-            min_transaction_amount=5,
-            max_transaction_amount=20
+            min_transaction_amount=30,
+            max_transaction_amount=70
         )
         generate_data(data_generation_config)
         df = pd.read_csv(f"/Users/cyang/PycharmProjects/PartIIProject/data/synthetic_data/rl/random_data.csv")
@@ -180,14 +232,14 @@ def test(env, episodes):
 def train(env):
     logdir = "./ppo_tensorboard"
 
-    model = A2C('MlpPolicy', env, verbose=1,
+    model = PPO('MlpPolicy', env, verbose=1,
                 tensorboard_log=logdir, learning_rate=0.00015)  # python3 -m tensorboard.main --logdir=./ppo_tensorboard
-    model.learn(total_timesteps=200000, callback=ActionDistributionCallback())
-    model.save('./models')
+    model.learn(total_timesteps=1000000, callback=ActionDistributionCallback())
+    model.save('./delay_0.2.zip')
 
 
 def test_model(env):
-    model = PPO.load('./models.zip')
+    model = PPO.load('models/models.zip')
     obs = env.reset()[0]
     done = False
     while not done:

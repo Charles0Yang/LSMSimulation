@@ -1,4 +1,4 @@
-from src.classes.bank import NormalBank, DelayWhenConvenientBank, RuleBasedDelayBank, RLDelayBank
+from src.classes.DP import NormalBank, DelayWhenConvenientBank, RuleBasedDelayBank, RLDelayBank, BasicDelayBank
 from src.simulation import settings
 
 
@@ -26,6 +26,11 @@ def generate_banks(bank_types, starting_balance, input_file):
         if i == 3:
             for l in range(bank_types[i]):
                 banks[bank_num] = DelayWhenConvenientBank(bank_num, bank_name, starting_balance, input_file, settings.delay_amount)
+                bank_num += 1
+                bank_name = chr(ord(bank_name) + 1)
+        if i == 4:
+            for l in range(bank_types[i]):
+                banks[bank_num] = BasicDelayBank(bank_num, bank_name, starting_balance, input_file, settings.delay_amount)
                 bank_num += 1
                 bank_name = chr(ord(bank_name) + 1)
     return banks

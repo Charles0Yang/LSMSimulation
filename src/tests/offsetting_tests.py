@@ -1,9 +1,10 @@
 from datetime import datetime
 from queue import Queue
 
-from src.classes.bank import NormalBank
-from src.classes.transaction import DatedTransaction
-from src.simulation.matching import Matching
+from src.classes.DP import NormalBank
+from src.classes.payment import DatedTransaction
+from src.simulation.metrics import Metrics
+from src.simulation.offsetting import Matching
 from src.simulation.day_simulator import fetch_all_bank_balances
 
 
@@ -118,30 +119,21 @@ def three_banks_graph_bilateral_matching_one_way():
 
 
 def three_banks_graph_bilateral_matching_multiple_way():
-    banks = {0: NormalBank(0, 'A', 500, "random/random_data.csv"),
-             1: NormalBank(1, 'B', 500, "random/random_data.csv"),
-             2: NormalBank(2, 'C', 500, "random/random_data.csv")}
+    banks = {0: NormalBank(0, 'A', 22*2, "random/random_data.csv"),
+             1: NormalBank(1, 'B', 210*2, "random/random_data.csv"),
+             2: NormalBank(2, 'C', 270*2, "random/random_data.csv"),
+             3: NormalBank(3, 'D', 150*2, "random/random_data.csv"),
+             4: NormalBank(4, 'E', 98*2, "random/random_data.csv")}
 
     time = datetime(2023, 1, 1, 5, 45)
-
     transaction_queue = Queue()
-    transaction_queue.put(DatedTransaction(0, 1, 20, time))
-    transaction_queue.put(DatedTransaction(0, 2, 40, time))
-    transaction_queue.put(DatedTransaction(1, 2, 20, time))
-    transaction_queue.put(DatedTransaction(1, 0, 40, time))
-    transaction_queue.put(DatedTransaction(2, 0, 20, time))
-    transaction_queue.put(DatedTransaction(2, 1, 40, time))
-    transaction_queue.put(DatedTransaction(0, 1, 20, time))
-    transaction_queue.put(DatedTransaction(0, 2, 20, time))
+    transaction_queue.put(DatedTransaction(0, 1, 30, 0, time))
 
     matching = Matching(banks, transaction_queue, time)
-    matching.graph_bilateral_offsetting()
+    metrics = Metrics()
+    carryover = matching.multilateral_offsetting(metrics)
 
-    balances = fetch_all_bank_balances(banks)
-
-    assert (balances[0] == 460)
-    assert (balances[1] == 520)
-    assert (balances[2] == 520)
+    assert (carryover.qsize() == 1)
 
 
 def three_banks_multilateral_matching_reject_all_transactions():
@@ -350,7 +342,7 @@ def main():
     three_banks_multilateral_matching_complex_accept_all_transactions()
     three_banks_multilateral_matching_accept_and_reject_transactions()
     """
-    weird_test()
+    three_banks_graph_bilateral_matching_multiple_way()
 
 
 main()

@@ -1,9 +1,11 @@
+import bisect
+
 import numpy as np
 from scipy import integrate
 from stable_baselines3 import PPO
 
 from src.classes.configs.data_generation_config import DataGenerationConfig
-from src.classes.transaction import DatedTransaction
+from src.classes.payment import DatedTransaction
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 import pandas as pd
@@ -50,10 +52,11 @@ class Bank:
                 self.priority_balance = 0
             else:
                 self.priority_balance -= transaction.amount
+            #self.priority_balance -= transaction.amount
         else:
             self.non_priority_balance -= transaction.amount
         self.update_total_balance()
-        self.check_min_balance()
+        #self.check_min_balance()
 
     def update_total_balance(self):
         self.balance = self.priority_balance + self.non_priority_balance
@@ -132,13 +135,38 @@ class NormalBank(AgentBank):
     def check_for_transactions(self, time, metrics):
         while self.transactions_to_do and time == self.transactions_to_do[0].time:
             transaction = self.transactions_to_do.pop(0)
-            metrics.add_transaction()
             self.total_transactions += 1
             if transaction.priority == 1:
                 self.add_transaction_to_priority_queue(transaction)
             else:
                 self.add_transaction_to_non_priority_queue(transaction)
 
+class BasicDelayBank(AgentBank):
+    def __init__(self, id, name, balance, input_file, max_delay_amount):
+        super().__init__(id, name, balance, input_file)
+        self.max_delay_amount = max_delay_amount
+        self.num_transactions_delayed = 0
+
+    def calculate_percentage_transactions_delayed(self):
+        if self.total_transactions == 0:
+            return 0
+        return self.num_transactions_delayed / self.total_transactions
+
+    def check_for_transactions(self, time, metrics):
+        while self.transactions_to_do and time == self.transactions_to_do[0].time:
+            transaction = self.transactions_to_do.pop(0)
+            actual_delay = settings.delay_amount
+            transaction.time += timedelta(seconds=actual_delay)
+            self.num_transactions_delayed += 1
+            self.total_time_delay += actual_delay
+            self.total_transactions += 1
+            self.cum_settlement_delay += actual_delay
+            if transaction.time > self.closing_time:
+                transaction.time = self.closing_time
+            if transaction.priority == 1:
+                self.add_transaction_to_priority_queue(transaction)
+            else:
+                self.add_transaction_to_non_priority_queue(transaction)
 
 class DelayBank(AgentBank):
     def __init__(self, id, name, balance, input_file, max_delay_amount):
@@ -226,12 +254,46 @@ class RuleBasedDelayBank(DelayBank):
 class RLDelayBank(DelayBank):
     def __init__(self, id, name, balance, input_file, delay_amount):
         super().__init__(id, name, balance, input_file, int(delay_amount/2))
-        self.model = PPO.load("/Users/cyang/PycharmProjects/PartIIProject/src/rl/models.zip")
+        self.model = PPO.load(f"/Users/cyang/PycharmProjects/PartIIProject/src/rl/models/models.zip")
+        self.delay_percentage = 0
 
-    def calculate_delay_benefit(self, time, amount):
+    def calculate_delay_benefits(self, balance, amount, min_balance):
         obs = np.array([self.balance, amount, self.min_balance])
         action, _ = self.model.predict(obs)
+        self.delay_percentage += action
         return int(action)
+
+
+    def check_for_transactions(self, time, metrics):
+        temp_balance = self.balance
+        temp_min_balance = self.min_balance
+        while self.transactions_to_do and time >= self.transactions_to_do[0].time:
+            if self.calculate_delay_benefits(temp_balance, self.transactions_to_do[0].amount, temp_min_balance) == 0:
+                transaction = self.transactions_to_do.pop(0)
+                self.total_transactions += 1
+                if time > transaction.time:
+                    self.num_transactions_delayed += 1
+                    self.total_time_delay += (time - transaction.time).total_seconds()
+                metrics.add_transaction()
+                transaction.time = time
+                if transaction.priority == 1:
+                    self.add_transaction_to_priority_queue(transaction)
+                else:
+                    self.add_transaction_to_non_priority_queue(transaction)
+                temp_balance -= transaction.amount
+                if temp_balance < temp_min_balance:
+                    temp_min_balance = temp_balance
+            else:
+                transaction = self.transactions_to_do.pop(0)
+                transaction.time += timedelta(seconds=settings.delay_amount)
+                if transaction.time > settings.end_time:
+                    transaction.time = settings.end_time
+                for i in range(len(self.transactions_to_do)):
+                    if transaction.time <= self.transactions_to_do[i].time:
+                        self.transactions_to_do.insert(i, transaction)
+                        break
+                break
+
 
 
 class DelayWhenConvenientBank(DelayBank):

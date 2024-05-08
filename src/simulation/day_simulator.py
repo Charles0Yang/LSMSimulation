@@ -1,8 +1,9 @@
 from datetime import timedelta
 from queue import Queue
-from src.simulation.matching import Matching
+from src.simulation.offsetting import Matching
 from src.simulation import settings
 from src.utils.csvutils import write_to_csv
+import copy
 
 
 def fetch_all_bank_balances(banks):
@@ -19,9 +20,9 @@ def simulate_day_transactions(banks, metrics):
     non_priority_transaction_queue = Queue()
     current_time = settings.start_time
     matching_window = 0
+    bilateral = True
 
     while current_time != settings.end_time:
-
         # Get all transactions for all banks at this timestep and put them in relevant central queue
         for bank in banks:
             banks[bank].check_for_transactions(current_time, metrics)
@@ -39,6 +40,8 @@ def simulate_day_transactions(banks, metrics):
             if banks[transaction.sending_bank_id].balance - transaction.amount >= 0:
                 banks[transaction.sending_bank_id].outbound_transaction(transaction)
                 banks[transaction.receiving_bank_id].inbound_transaction(transaction)
+                metrics.total_transaction_volume += transaction.amount
+                metrics.liquidity_used += transaction.amount
             else:
                 temp_transaction_queue.put(transaction)
         priority_transaction_queue = temp_transaction_queue
@@ -46,8 +49,14 @@ def simulate_day_transactions(banks, metrics):
         if settings.day_config.LSM_enabled:
             # Run offsetting cycle and find matching payments
             if matching_window == settings.day_config.matching_window:
-                matching = Matching(banks, non_priority_transaction_queue, current_time)
-                non_priority_transaction_queue = matching.multilateral_offsetting(metrics)
+                if bilateral:
+                    matching = Matching(banks, non_priority_transaction_queue, current_time)
+                    non_priority_transaction_queue = matching.bilateral(metrics)
+                    bilateral = not bilateral
+                else:
+                    matching = Matching(banks, non_priority_transaction_queue, current_time)
+                    non_priority_transaction_queue = matching.multilateral(metrics)
+                    bilateral = not bilateral
                 matching_window = -20 # Cycle takes 20 seconds complete
 
             else:
@@ -58,7 +67,7 @@ def simulate_day_transactions(banks, metrics):
                 for transaction in list(non_priority_transaction_queue.queue):
                     banks[transaction.sending_bank_id].add_delay()
 
-                metrics.add_bank_delay(priority_transaction_queue.qsize() + non_priority_transaction_queue.qsize())
+                metrics.add_bank_delay(non_priority_transaction_queue.qsize() + priority_transaction_queue.qsize())
 
             matching_window += 1
 
@@ -66,16 +75,20 @@ def simulate_day_transactions(banks, metrics):
             temp_transaction_queue = Queue()
             while not non_priority_transaction_queue.empty():
                 transaction = non_priority_transaction_queue.get()
-                if banks[transaction.sending_bank_id].balance - transaction.amount >= 0:
+                if banks[transaction.sending_bank_id].non_priority_balance - transaction.amount >= 0:
                     banks[transaction.sending_bank_id].outbound_transaction(transaction)
                     banks[transaction.receiving_bank_id].inbound_transaction(transaction)
                 else:
                     temp_transaction_queue.put(transaction)
             non_priority_transaction_queue = temp_transaction_queue
+            metrics.add_bank_delay(non_priority_transaction_queue.qsize() + priority_transaction_queue.qsize())
 
         current_time += timedelta(seconds=1)
         current_bank_balances = [current_time] + fetch_all_bank_balances(banks)
         bank_balances.append(current_bank_balances)
+
+        for bank in banks:
+            banks[bank].check_min_balance()
 
     ### Deal with deadline possible transactions - all transactions now priority (no offsetting)
     while not non_priority_transaction_queue.empty():

@@ -57,10 +57,9 @@ def generate_data(data_generation_config):
 
     transaction_times = np.random.uniform(0, (end_time - start_time).seconds,
                                           size=data_generation_config.num_transactions)
-    #timesteps = np.array(sorted([start_time + timedelta(seconds=int(time)) for time in transaction_times]))
-    timesteps = np.array(generate_characteristic_times(num_transactions))
-    priorities = (np.random.random(size=len(transaction_times)) > settings.priority_transaction_percentage).astype(int)
-
+    timesteps = np.array(sorted([start_time + timedelta(seconds=int(time)) for time in transaction_times]))
+    #timesteps = np.array(generate_characteristic_times(num_transactions))
+    priorities = (np.random.random(size=len(transaction_times)) > settings.non_priority_transaction_percentage).astype(int)
     # Set random transactions equally distributed among all banks
     num_bank_transactions = num_transactions // num_banks
     for bank in banks:
@@ -97,14 +96,18 @@ def generate_data(data_generation_config):
           open('/Users/cyang/PycharmProjects/PartIIProject/data/synthetic_data/random/random_data.csv', 'w',
                newline='') as random,
           open('/Users/cyang/PycharmProjects/PartIIProject/data/synthetic_data/alternative/alternative_data.csv', 'w',
-               newline='') as alternative):
+               newline='') as alternative,
+          open('/Users/cyang/PycharmProjects/PartIIProject/data/synthetic_data/rl/random_data.csv', 'w',
+               newline='') as rl_random):
         reactive_writer = csv.writer(reactive, delimiter=',')
         random_writer = csv.writer(random, delimiter=',')
         alternative_writer = csv.writer(alternative, delimiter=',')
+        rl_random_writer = csv.writer(rl_random, delimiter=',')
 
         reactive_writer.writerow(["time", "from", "to", "amount", "priority"])
         random_writer.writerow(["time", "from", "to", "amount", "priority"])
         alternative_writer.writerow(["time", "from", "to", "amount", "priority"])
+        rl_random_writer.writerow(["time", "from", "to", "amount", "priority"])
 
         for row in reactive_data:
             reactive_writer.writerow(row)
@@ -114,6 +117,9 @@ def generate_data(data_generation_config):
 
         for row in alternative_data:
             alternative_writer.writerow(row)
+
+        for row in random_data:
+            rl_random_writer.writerow(row)
 
 
 """

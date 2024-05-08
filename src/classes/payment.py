@@ -11,7 +11,7 @@ class DatedTransaction(Transaction):
         self.time = time
 
     def __repr__(self):
-        return f"{self.sending_bank_id} to {self.receiving_bank_id}: {self.amount} with priority {self.priority}"
+        return f"({self.sending_bank_id},{self.receiving_bank_id}): {self.amount}"
 
     def __lt__(self, other):
         return self.time < other.time
